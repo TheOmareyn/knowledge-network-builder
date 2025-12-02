@@ -1,0 +1,127 @@
+<!-- csslint-disable -->
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Knowledge Network Builder{% endblock %}
+
+{% block content %}
+<h2>Dashboard</h2>
+<p style="font-size:1.1em; color:#666;">Welcome back, <strong>{{ current_user.username }}</strong>
+{% if current_user.is_premium %}
+    <span style="background:#FFD700; color:#000; padding:4px 8px; border-radius:4px; font-size:0.85em; font-weight:bold; margin-left:8px;">⭐ PREMIUM</span>
+{% endif %}
+</p>
+
+<!-- Quick Actions -->
+<section style="margin:30px 0;">
+    <h3 style="margin-bottom:20px; color:#333;">Quick Actions</h3>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:15px;">
+        <a href="{{ url_for('document.upload_page') }}" style="text-decoration:none; color:inherit;">
+            <div style="border:2px solid #4CAF50; border-radius:8px; padding:20px; background:#f0f8ff; cursor:pointer; transition:all 0.3s;" onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 4px 12px rgba(76,175,80,0.3)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                <div style="font-size:2.5em; margin-bottom:10px;">📤</div>
+                <h4 style="margin:0 0 8px 0; color:#4CAF50;">Upload PDF</h4>
+                <p style="margin:0; font-size:0.9em; color:#666;">Add a new document to build knowledge network</p>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('document.networks_page') }}" style="text-decoration:none; color:inherit;">
+            <div style="border:2px solid #2196F3; border-radius:8px; padding:20px; background:#f0f8ff; cursor:pointer; transition:all 0.3s;" onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 4px 12px rgba(33,150,243,0.3)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none';">
+                <div style="font-size:2.5em; margin-bottom:10px;">📚</div>
+                <h4 style="margin:0 0 8px 0; color:#2196F3;">My Networks</h4>
+                <p style="margin:0; font-size:0.9em; color:#666;">Browse and explore your knowledge networks</p>
+            </div>
+        </a>
+    </div>
+</section>
+
+<!-- Account Status -->
+<section style="margin:30px 0;">
+    <h3 style="margin-bottom:20px; color:#333;">Account Status</h3>
+    {% if current_user.is_premium %}
+    <div style="padding:20px; background:#fff3cd; border:2px solid #FFD700; border-radius:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div>
+                <h4 style="margin:0; color:#000;">⭐ Premium Account</h4>
+                <p style="margin:5px 0 0 0; color:#666;">Enjoy unlimited potential with premium features</p>
+            </div>
+        </div>
+        <div style="margin-top:15px;">
+            <strong>Benefits:</strong> 100 API calls/day • Private networks • Priority support
+        </div>
+        <div style="margin-top:15px;">
+            <strong>API Usage Today:</strong> {{ current_user.api_calls_today }}/100 calls
+            <div style="background:#e0e0e0; height:12px; border-radius:6px; margin-top:8px; overflow:hidden;">
+                <div style="background:#FFD700; height:100%; width:{{ (current_user.api_calls_today / 100 * 100) | int }}%; transition:width 0.3s;"></div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div style="padding:20px; background:#e3f2fd; border:2px solid #2196F3; border-radius:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div>
+                <h4 style="margin:0; color:#1976d2;">Free Account</h4>
+                <p style="margin:5px 0 0 0; color:#666;">Upgrade to unlock more features</p>
+            </div>
+            <a href="#" class="btn btn-primary" style="background:#FFD700; color:#000; border:none; padding:10px 20px; font-weight:bold;">
+                Upgrade to Premium
+            </a>
+        </div>
+        <div style="margin-top:15px;">
+            <strong>Current Plan:</strong> 20 API calls/day • All networks are public
+        </div>
+        <div style="margin-top:15px;">
+            <strong>API Usage Today:</strong> {{ current_user.api_calls_today }}/20 calls
+            <div style="background:#e0e0e0; height:12px; border-radius:6px; margin-top:8px; overflow:hidden;">
+                <div style="background:#2196F3; height:100%; width:{{ (current_user.api_calls_today / 20 * 100) | int }}%; transition:width 0.3s;"></div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</section>
+
+<!-- Statistics -->
+<section style="margin:30px 0;">
+    <h3 style="margin-bottom:20px; color:#333;">My Statistics</h3>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:15px;">
+        <div style="border:1px solid #ddd; border-radius:8px; padding:20px; background:#fff; text-align:center;">
+            <div style="font-size:2.5em; color:#4CAF50; font-weight:bold;">{{ stats.total_books }}</div>
+            <div style="margin-top:8px; color:#666;">Total Books</div>
+        </div>
+        
+        <div style="border:1px solid #ddd; border-radius:8px; padding:20px; background:#fff; text-align:center;">
+            <div style="font-size:2.5em; color:#2196F3; font-weight:bold;">{{ stats.total_questions }}</div>
+            <div style="margin-top:8px; color:#666;">Total Questions</div>
+        </div>
+        
+        <div style="border:1px solid #ddd; border-radius:8px; padding:20px; background:#fff; text-align:center;">
+            <div style="font-size:2.5em; color:#FF9800; font-weight:bold;">{{ stats.total_answers }}</div>
+            <div style="margin-top:8px; color:#666;">Total Answers</div>
+        </div>
+        
+        <div style="border:1px solid #ddd; border-radius:8px; padding:20px; background:#fff; text-align:center;">
+            <div style="font-size:2.5em; color:#9C27B0; font-weight:bold;">{{ stats.categories_count }}</div>
+            <div style="margin-top:8px; color:#666;">Categories</div>
+        </div>
+    </div>
+</section>
+
+<!-- Top Categories -->
+{% if stats.top_categories and stats.top_categories|length > 0 %}
+<section style="margin:30px 0;">
+    <h3 style="margin-bottom:20px; color:#333;">Most Active Categories</h3>
+    <div style="background:#fff; border:1px solid #ddd; border-radius:8px; padding:20px;">
+        {% for category in stats.top_categories %}
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; {% if not loop.last %}border-bottom:1px solid #f0f0f0;{% endif %}">
+            <div style="flex:1;">
+                <strong style="color:#333;">{{ category.name|replace('_', ' ')|title }}</strong>
+            </div>
+            <div style="text-align:right;">
+                <span style="background:#e3f2fd; padding:4px 12px; border-radius:12px; color:#1976d2; font-weight:500;">
+                    {{ category.count }} {{ 'book' if category.count == 1 else 'books' }}
+                </span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+{% endblock %}

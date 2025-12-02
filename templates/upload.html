@@ -1,0 +1,507 @@
+<!-- csslint-disable -->
+{% extends 'base.html' %}
+
+{% block title %}Upload PDF - Knowledge Network Builder{% endblock %}
+
+{% block content %}
+<h2>📤 Upload PDF</h2>
+
+<section class="upload-section">
+    <div id="upload-form-container">
+    <form method="post" action="{{ url_for('document.upload') }}" enctype="multipart/form-data" id="upload-form">
+        <div class="form-group">
+            <label for="file-input">Select PDF file:</label>
+            <input type="file" name="file" id="file-input" accept="application/pdf" required>
+        </div>
+        
+        <div class="form-group" style="margin-top:12px;">
+            <label for="bibtex-input">Or paste BibTeX to auto-fill metadata:</label>
+            <textarea id="bibtex-input" rows="6" style="width:100%; padding:8px; font-family:monospace; font-size:0.9em;" placeholder="@article{...}"></textarea>
+            <button type="button" id="parse-bibtex" class="btn btn-small" style="margin-top:4px;">Parse BibTeX</button>
+        </div>
+
+        <div class="form-group" style="margin-top:12px;">
+            <label for="title-input">Title: <span style="color:red;">*</span></label>
+            <input type="text" name="title" id="title-input" required style="width:100%; padding:6px;">
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+            <label for="author-input">Author(s): <span style="color:red;">*</span></label>
+            <input type="text" name="author" id="author-input" required style="width:100%; padding:6px;">
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+            <label for="year-input">Year:</label>
+            <input type="text" name="year" id="year-input" style="width:100%; padding:6px;">
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+            <label for="publisher-input">Publisher:</label>
+            <input type="text" name="publisher" id="publisher-input" style="width:100%; padding:6px;">
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+            <label for="journal-input">Journal:</label>
+            <input type="text" name="journal" id="journal-input" style="width:100%; padding:6px;">
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+            <label for="volume-input">Volume:</label>
+            <input type="text" name="volume" id="volume-input" style="width:100%; padding:6px;">
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+            <label for="number-input">Number/Issue:</label>
+            <input type="text" name="number" id="number-input" style="width:100%; padding:6px;">
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+            <label for="pages-input">Pages:</label>
+            <input type="text" name="pages" id="pages-input" style="width:100%; padding:6px;" placeholder="e.g., 123-145">
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+            <label for="publication-type-input">Publication Type:</label>
+            <select name="publication_type" id="publication-type-input" style="width:100%; padding:6px;">
+                <option value="">Select type...</option>
+                <option value="journal">Journal Article</option>
+                <option value="book">Book</option>
+                <option value="conference">Conference Paper</option>
+                <option value="thesis">Thesis/Dissertation</option>
+                <option value="report">Technical Report</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+            <label for="category-input">Category: <span style="color:red;">*</span></label>
+            <select name="category" id="category-input" required style="width:100%; padding:6px;">
+                <option value="">Select category...</option>
+                <optgroup label="Sciences">
+                    <option value="physics">Physics</option>
+                    <option value="chemistry">Chemistry</option>
+                    <option value="biology">Biology</option>
+                    <option value="mathematics">Mathematics</option>
+                    <option value="computer_science">Computer Science</option>
+                    <option value="astronomy">Astronomy</option>
+                    <option value="earth_sciences">Earth Sciences</option>
+                    <option value="environmental_science">Environmental Science</option>
+                    <option value="engineering">Engineering</option>
+                    <option value="medicine">Medicine</option>
+                    <option value="neuroscience">Neuroscience</option>
+                </optgroup>
+                <optgroup label="Social Sciences">
+                    <option value="psychology">Psychology</option>
+                    <option value="sociology">Sociology</option>
+                    <option value="economics">Economics</option>
+                    <option value="political_science">Political Science</option>
+                    <option value="anthropology">Anthropology</option>
+                    <option value="education">Education</option>
+                    <option value="linguistics">Linguistics</option>
+                    <option value="geography">Geography</option>
+                    <option value="history">History</option>
+                    <option value="philosophy">Philosophy</option>
+                    <option value="law">Law</option>
+                    <option value="business">Business & Management</option>
+                </optgroup>
+                <optgroup label="Arts & Humanities">
+                    <option value="literature">Literature</option>
+                    <option value="art">Art & Art History</option>
+                    <option value="music">Music</option>
+                    <option value="religion">Religion & Theology</option>
+                </optgroup>
+                <optgroup label="Other">
+                    <option value="interdisciplinary">Interdisciplinary</option>
+                    <option value="other">Other</option>
+                </optgroup>
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+            <label for="doctrine-input">Doctrine/Theoretical Framework:</label>
+            <input 
+                type="text" 
+                name="doctrine" 
+                id="doctrine-input" 
+                list="doctrine-list"
+                style="width:100%; padding:6px;" 
+                placeholder="Enter or select a doctrine (e.g., Marxism, Constructivism, Behaviorism)">
+            <datalist id="doctrine-list">
+                {% for doctrine in doctrines %}
+                <option value="{{ doctrine }}">
+                {% endfor %}
+            </datalist>
+            <div style="font-size:0.85em; color:#666; margin-top:4px;">
+                Optional: Specify the theoretical framework or doctrine this work follows
+            </div>
+        </div>
+
+        {% if current_user.is_premium %}
+        <div class="form-group" style="margin-top:12px; padding:10px; background:#fff3cd; border-radius:4px;">
+            <label style="display:flex; align-items:center; cursor:pointer;">
+                <input type="checkbox" name="is_private" id="is-private-input" style="margin-right:8px;">
+                <span>🔒 Make this network private (Premium feature)</span>
+            </label>
+            <div style="font-size:0.85em; color:#666; margin-top:4px; margin-left:24px;">
+                Private networks are only visible to you
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="form-actions" style="margin-top:12px;">
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </div>
+    </form>
+    </div>
+    
+    {% if last_uploaded_doc %}
+    <div style="margin-top:20px; padding:15px; background:#f0f8ff; border:1px solid #4CAF50; border-radius:4px;">
+        <h4 style="margin-top:0; color:#4CAF50;">✓ Upload Successful!</h4>
+        <p><strong>Title:</strong> {{ last_uploaded_doc.title }}</p>
+        <p><strong>Author:</strong> {{ last_uploaded_doc.author }}</p>
+        <p><strong>Total Pages:</strong> {{ last_uploaded_doc.page_count or 'Unknown' }}</p>
+        
+        <form method="post" action="{{ url_for('document.process_document', document_id=last_uploaded_doc.id) }}" style="margin-top:12px;" id="process-form">
+            <div style="margin-bottom:12px;">
+                <label for="batch-size-slider" style="display:block; margin-bottom:8px; font-weight:bold;">
+                    Process PDF - Pages per batch: <span id="batch-size-value">10</span>
+                </label>
+                <input type="range" name="batch_size" id="batch-size-slider" min="5" max="20" step="1" value="10" 
+                       data-total-pages="{{ last_uploaded_doc.page_count|default(0) }}"
+                       style="width:100%; max-width:400px;">
+                <div style="margin-top:8px; font-size:0.9em; color:#666;">
+                    {% if last_uploaded_doc.page_count %}
+                    <span id="api-requests-info">
+                        Estimated API requests: <strong id="api-requests-count">{{ ((last_uploaded_doc.page_count / 10) | round(0, 'ceil')) | int }}</strong>
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div style="margin-bottom:12px;">
+                <button type="button" id="toggle-page-range" class="btn btn-small" style="padding:6px 12px; background:#f0f0f0; color:#333; border:1px solid #ddd;">
+                    <span id="toggle-page-range-icon">▼</span> Advanced: Page Range Selection
+                </button>
+            </div>
+            
+            <div id="page-range-container" style="display:none; margin-bottom:12px; padding:10px; background:#f9f9f9; border-radius:4px;">
+                <div style="font-weight:bold; margin-bottom:8px;">📄 Page Range Selection:</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                    <div>
+                        <label for="skip-start" style="display:block; margin-bottom:4px; font-size:0.9em;">
+                            Skip from start:
+                        </label>
+                        <input type="number" name="skip_start" id="skip-start" min="0" max="{{ (last_uploaded_doc.page_count|default(0)) - 1 }}" value="0" 
+                               style="width:100%; padding:6px;" data-total-pages="{{ last_uploaded_doc.page_count|default(0) }}">
+                        <div style="font-size:0.8em; color:#666; margin-top:2px;">Pages to ignore from beginning</div>
+                    </div>
+                    <div>
+                        <label for="skip-end" style="display:block; margin-bottom:4px; font-size:0.9em;">
+                            Skip from end:
+                        </label>
+                        <input type="number" name="skip_end" id="skip-end" min="0" max="{{ (last_uploaded_doc.page_count|default(0)) - 1 }}" value="0" 
+                               style="width:100%; padding:6px;" data-total-pages="{{ last_uploaded_doc.page_count|default(0) }}">
+                        <div style="font-size:0.8em; color:#666; margin-top:2px;">Pages to ignore from end</div>
+                    </div>
+                </div>
+                <div id="page-range-info" style="margin-top:8px; padding:6px; background:#fff; border-radius:3px; font-size:0.85em; color:#333;">
+                    <strong>Processing range:</strong> Pages <span id="range-start">1</span> to <span id="range-end">{{ last_uploaded_doc.page_count|default(0) }}</span> 
+                    (<span id="pages-to-process">{{ last_uploaded_doc.page_count|default(0) }}</span> pages)
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Start Processing</button>
+        </form>
+        
+        <script>
+        (function() {
+            // Toggle page range section
+            const togglePageRangeBtn = document.getElementById('toggle-page-range');
+            const pageRangeContainer = document.getElementById('page-range-container');
+            const togglePageRangeIcon = document.getElementById('toggle-page-range-icon');
+            
+            if (togglePageRangeBtn && pageRangeContainer) {
+                togglePageRangeBtn.addEventListener('click', function() {
+                    if (pageRangeContainer.style.display === 'none') {
+                        pageRangeContainer.style.display = 'block';
+                        togglePageRangeIcon.textContent = '▲';
+                    } else {
+                        pageRangeContainer.style.display = 'none';
+                        togglePageRangeIcon.textContent = '▼';
+                    }
+                });
+            }
+            
+            // Batch size and page range calculations
+            const slider = document.getElementById('batch-size-slider');
+            const valueDisplay = document.getElementById('batch-size-value');
+            const requestsCount = document.getElementById('api-requests-count');
+            const skipStart = document.getElementById('skip-start');
+            const skipEnd = document.getElementById('skip-end');
+            const rangeStart = document.getElementById('range-start');
+            const rangeEnd = document.getElementById('range-end');
+            const pagesToProcess = document.getElementById('pages-to-process');
+            const totalPages = slider ? parseInt(slider.dataset.totalPages) : 0;
+            
+            function updateCalculations() {
+                const batchSize = parseInt(slider.value);
+                const skipStartVal = parseInt(skipStart.value) || 0;
+                const skipEndVal = parseInt(skipEnd.value) || 0;
+                
+                // Calculate effective page range
+                const startPage = skipStartVal + 1;
+                const endPage = Math.max(0, totalPages - skipEndVal);
+                const effectivePages = Math.max(0, endPage - skipStartVal);
+                
+                // Update displays
+                valueDisplay.textContent = batchSize;
+                if (rangeStart) rangeStart.textContent = startPage;
+                if (rangeEnd) rangeEnd.textContent = endPage;
+                if (pagesToProcess) pagesToProcess.textContent = effectivePages;
+                
+                if (effectivePages > 0 && requestsCount) {
+                    const apiRequests = Math.ceil(effectivePages / batchSize);
+                    requestsCount.textContent = apiRequests;
+                }
+            }
+            
+            if (slider && valueDisplay) {
+                slider.addEventListener('input', updateCalculations);
+            }
+            if (skipStart) {
+                skipStart.addEventListener('input', updateCalculations);
+            }
+            if (skipEnd) {
+                skipEnd.addEventListener('input', updateCalculations);
+            }
+        })();
+        </script>
+        
+        {% if last_uploaded_doc.progress %}
+            {% set is_done = last_uploaded_doc.progress.status == 'done' %}
+            {% set is_error = 'error' in (last_uploaded_doc.progress.status|lower) %}
+            {% set is_processing = last_uploaded_doc.progress.status not in ['done', 'pending'] and not is_error %}
+            {% set border_color = '#4CAF50' if is_done else ('#b00020' if is_error else '#2196F3') %}
+            {% set text_color = '#4CAF50' if is_done else ('#b00020' if is_error else '#2196F3') %}
+            
+            <div id="progress-display" style="margin-top:10px; padding:8px; background:#fff; border-radius:4px; border-left:3px solid {{ border_color }};">
+                <strong>Status:</strong> 
+                <span id="status-text" style="color:{{ text_color }};">
+                    {{ last_uploaded_doc.progress.status }}
+                </span>
+                
+                {% if last_uploaded_doc.progress.current_batch and last_uploaded_doc.progress.total_batches %}
+                    {% set progress_percent = (last_uploaded_doc.progress.current_batch / last_uploaded_doc.progress.total_batches * 100) | int %}
+                    <div style="margin-top:8px;">
+                        <div style="background:#e0e0e0; border-radius:4px; height:20px; overflow:hidden;">
+                            <div id="progress-bar" style="background:#4CAF50; height:100%; width:{{ progress_percent }}%; transition:width 0.3s;"></div>
+                        </div>
+                        <div id="progress-text" style="font-size:0.85em; color:#666; margin-top:4px;">
+                            Progress: {{ last_uploaded_doc.progress.current_batch }}/{{ last_uploaded_doc.progress.total_batches }} batches 
+                            ({{ progress_percent }}%)
+                        </div>
+                    </div>
+                {% endif %}
+                
+                {% if last_uploaded_doc.progress.error %}
+                    <div style="color:#b00020; margin-top:8px; padding:6px; background:#ffebee; border-radius:4px;">
+                        <strong>Error:</strong> {{ last_uploaded_doc.progress.error }}
+                    </div>
+                {% endif %}
+                
+                {% if last_uploaded_doc.progress.next_paragraph %}
+                    <div style="font-size:0.85em; color:#666; margin-top:4px;">Next page: {{ last_uploaded_doc.progress.next_paragraph }}</div>
+                {% endif %}
+            </div>
+            
+            {% if is_processing or (last_uploaded_doc.progress.status != 'pending' and last_uploaded_doc.progress.status != 'done' and 'error' not in last_uploaded_doc.progress.status|lower) %}
+            <script>
+            // Auto-refresh to show progress updates (only when actively processing)
+            (function() {
+                let refreshInterval = setInterval(function() {
+                    // Check if still processing
+                    const statusText = document.getElementById('status-text');
+                    if (statusText) {
+                        const status = statusText.textContent.trim();
+                        if (status === 'done' || status === 'pending' || status.toLowerCase().includes('error')) {
+                            clearInterval(refreshInterval);
+                            return;
+                        }
+                    }
+                    
+                    // Reload the page to get updated progress
+                    window.location.reload();
+                }, 3000); // Refresh every 3 seconds
+                
+                // Stop refreshing after 10 minutes (failsafe)
+                setTimeout(function() {
+                    clearInterval(refreshInterval);
+                }, 600000);
+            })();
+            </script>
+            {% endif %}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <script>
+    // Helper function to extract field value from BibTeX with proper brace handling
+    function extractBibtexField(bibtex, fieldName) {
+        // Match field = { ... } or field = "..."
+        const pattern = new RegExp(`${fieldName}\\s*=\\s*([{"])`, 'i');
+        const match = bibtex.match(pattern);
+        
+        if (!match) return null;
+        
+        const startChar = match[1];
+        const startIndex = bibtex.indexOf(match[0]) + match[0].length;
+        
+        if (startChar === '"') {
+            // For quotes, find the closing quote
+            const endIndex = bibtex.indexOf('"', startIndex);
+            if (endIndex === -1) return null;
+            return bibtex.substring(startIndex, endIndex);
+        } else {
+            // For braces, count nested braces to find the matching closing brace
+            let braceCount = 1;
+            let endIndex = startIndex;
+            
+            while (endIndex < bibtex.length && braceCount > 0) {
+                if (bibtex[endIndex] === '{') braceCount++;
+                else if (bibtex[endIndex] === '}') braceCount--;
+                endIndex++;
+            }
+            
+            if (braceCount === 0) {
+                return bibtex.substring(startIndex, endIndex - 1);
+            }
+            return null;
+        }
+    }
+    
+    // Helper function to convert LaTeX special characters to Unicode
+    function latexToUnicode(text) {
+        if (!text) return text;
+        
+        // Common LaTeX to Unicode conversions for Turkish and other characters
+        const conversions = {
+            // Turkish characters
+            '{\\.I}': 'İ', '{\\\'i}': 'í', '{\\`i}': 'ì', '{\\^i}': 'î', '{\\"i}': 'ï',
+            '{\\i}': 'ı', '{\\.i}': 'i',
+            '{\\c{c}}': 'ç', '{\\c{C}}': 'Ç', '{\\c c}': 'ç', '{\\c C}': 'Ç',
+            '{\\c{s}}': 'ş', '{\\c{S}}': 'Ş', '{\\c s}': 'ş', '{\\c S}': 'Ş',
+            '{\\"o}': 'ö', '{\\"O}': 'Ö', '{\\^o}': 'ô',
+            '{\\"u}': 'ü', '{\\"U}': 'Ü', '{\\^u}': 'û', '{\\u{u}}': 'ü', '{\\u{U}}': 'Ü',
+            '{\\u{g}}': 'ğ', '{\\u{G}}': 'Ğ', '{\\u g}': 'ğ', '{\\u G}': 'Ğ',
+            '{\\^a}': 'â', '{\\^A}': 'Â', '{\\"a}': 'ä', '{\\"A}': 'Ä',
+            
+            // Common diacritics
+            '{\\\' e}': 'é', '{\\\' a}': 'á', '{\\\' o}': 'ó',
+            '{\\` e}': 'è', '{\\` a}': 'à', '{\\` o}': 'ò',
+            
+            // Simple removals
+            '{\\^\\i}': 'î',
+            '\\&': '&',
+            '\\%': '%',
+            '\\$': '$',
+            '\\_': '_',
+            '\\#': '#',
+        };
+        
+        let result = text;
+        
+        // Apply conversions
+        for (const [latex, unicode] of Object.entries(conversions)) {
+            result = result.split(latex).join(unicode);
+        }
+        
+        // Remove remaining single-character braces like {I}, {A}, etc.
+        result = result.replace(/\{([a-zA-Z])\}/g, '$1');
+        
+        // Clean up any remaining LaTeX commands we didn't convert
+        result = result.replace(/\\[a-zA-Z]+/g, '');
+        
+        // Remove extra braces
+        result = result.replace(/[{}]/g, '');
+        
+        return result.trim();
+    }
+    
+    // BibTeX parser with proper brace handling
+    document.getElementById('parse-bibtex').addEventListener('click', function() {
+        const bibtex = document.getElementById('bibtex-input').value.trim();
+        if (!bibtex) return;
+
+        // Detect publication type from BibTeX entry type
+        const typeMatch = bibtex.match(/@(\w+)\{/i);
+        if (typeMatch) {
+            const entryType = typeMatch[1].toLowerCase();
+            const typeMapping = {
+                'article': 'journal',
+                'inproceedings': 'conference',
+                'conference': 'conference',
+                'book': 'book',
+                'phdthesis': 'thesis',
+                'mastersthesis': 'thesis',
+                'techreport': 'report'
+            };
+            const pubType = typeMapping[entryType] || 'other';
+            document.getElementById('publication-type-input').value = pubType;
+        }
+
+        // Extract fields using the helper function
+        const title = extractBibtexField(bibtex, 'title');
+        const author = extractBibtexField(bibtex, 'author');
+        const year = extractBibtexField(bibtex, 'year');
+        const publisher = extractBibtexField(bibtex, 'publisher');
+        const journal = extractBibtexField(bibtex, 'journal');
+        const volume = extractBibtexField(bibtex, 'volume');
+        const number = extractBibtexField(bibtex, 'number');
+        const pages = extractBibtexField(bibtex, 'pages');
+        const doctrine = extractBibtexField(bibtex, 'doctrine') || 
+                        extractBibtexField(bibtex, 'keywords') || 
+                        extractBibtexField(bibtex, 'note');
+
+        if (title) {
+            document.getElementById('title-input').value = latexToUnicode(title);
+        }
+        if (author) {
+            document.getElementById('author-input').value = latexToUnicode(author);
+        }
+        if (year) {
+            document.getElementById('year-input').value = year.replace(/[^0-9]/g, '');
+        }
+        if (publisher) {
+            document.getElementById('publisher-input').value = latexToUnicode(publisher);
+        }
+        if (journal) {
+            document.getElementById('journal-input').value = latexToUnicode(journal);
+        }
+        if (volume) {
+            document.getElementById('volume-input').value = volume.replace(/[^0-9]/g, '');
+        }
+        if (number) {
+            document.getElementById('number-input').value = number.replace(/[^0-9]/g, '');
+        }
+        if (pages) {
+            document.getElementById('pages-input').value = latexToUnicode(pages);
+        }
+        if (doctrine) {
+            document.getElementById('doctrine-input').value = latexToUnicode(doctrine);
+        }
+
+        // Clear bibtex after parsing
+        document.getElementById('bibtex-input').value = '';
+        
+        // Show feedback
+        const btn = document.getElementById('parse-bibtex');
+        btn.textContent = 'Parsed!';
+        btn.style.background = '#4CAF50';
+        setTimeout(() => {
+            btn.textContent = 'Parse BibTeX';
+            btn.style.background = '';
+        }, 2000);
+    });
+    </script>
+</section>
+{% endblock %}

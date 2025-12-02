@@ -1,0 +1,1687 @@
+{% extends 'base.html' %}
+
+{% block title %}Global Knowledge Network{% endblock %}
+
+{% block content %}
+<style>
+    /* Full page network visualization */
+    body {
+        overflow: hidden;
+    }
+    
+    #network-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 1;
+    }
+    
+    #sigma-container {
+        width: 100%;
+        height: 100%;
+        background: #f9f9f9;
+    }
+    
+    /* Overlay UI elements */
+    .overlay-panel {
+        position: fixed;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        padding: 15px;
+        z-index: 10;
+        backdrop-filter: blur(10px);
+    }
+    
+    #header-panel {
+        top: 20px;
+        left: 20px;
+        max-width: 500px;
+    }
+    
+    #controls-panel {
+        top: 20px;
+        right: 20px;
+        max-width: 400px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+    }
+    
+    #info-panel {
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 600px;
+        max-width: 80vw;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .panel-header {
+        font-weight: bold;
+        font-size: 1.1em;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #4CAF50;
+        color: #333;
+    }
+    
+    .close-panel {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: none;
+        border: none;
+        font-size: 1.2em;
+        cursor: pointer;
+        color: #666;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        line-height: 24px;
+        text-align: center;
+    }
+    
+    .close-panel:hover {
+        color: #000;
+    }
+    
+    .collapsed {
+        display: none;
+    }
+    
+    .toggle-btn {
+        position: fixed;
+        z-index: 11;
+        background: rgba(76, 175, 80, 0.9);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 8px 12px;
+        cursor: pointer;
+        font-size: 0.9em;
+    }
+    
+    .toggle-btn:hover {
+        background: rgba(76, 175, 80, 1);
+    }
+    
+    #toggle-header {
+        top: 20px;
+        left: 20px;
+    }
+    
+    #toggle-controls {
+        top: 20px;
+        right: 20px;
+    }
+    
+    #toggle-info {
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    
+    #screenshot-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 11;
+        background: rgba(76, 175, 80, 0.9);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 0.9em;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    #screenshot-btn:hover {
+        background: rgba(76, 175, 80, 1);
+    }
+    
+    .legend {
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #ddd;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 5px;
+        font-size: 0.9em;
+    }
+    
+    .legend-color {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 1px solid #999;
+    }
+</style>
+
+<!-- Full page network container -->
+<div id="network-container">
+    <div id="sigma-container"></div>
+</div>
+
+<!-- Header Panel -->
+<button id="toggle-header" class="toggle-btn collapsed">📊 Info</button>
+<div id="header-panel" class="overlay-panel">
+    <button class="close-panel" onclick="togglePanel('header')">✕</button>
+    <div class="panel-header">Global Knowledge Network</div>
+    <div style="font-size:0.9em; color:#666; margin-bottom:10px;">
+        Explore connections between categories, keywords, questions, and books across your entire library.
+    </div>
+    <div class="legend">
+        <div style="font-weight:bold; margin-bottom:8px;">Node Types:</div>
+        <div class="legend-item">
+            <div class="legend-color" style="background:#FF5722;"></div>
+            <span>Category (Level 1)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background:#4CAF50;"></div>
+            <span>Keyword (Level 2)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background:#2196F3;"></div>
+            <span>Question (Level 3)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background:#9C27B0;"></div>
+            <span>Book (Level 4) - Double-click to view</span>
+        </div>
+    </div>
+    <div style="margin-top:15px;">
+        <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-small" style="display:inline-block;">← Back to Dashboard</a>
+    </div>
+</div>
+
+<!-- Controls Panel -->
+<button id="toggle-controls" class="toggle-btn collapsed">⚙️ Controls</button>
+<div id="controls-panel" class="overlay-panel">
+    <button class="close-panel" onclick="togglePanel('controls')">✕</button>
+    <div class="panel-header">Visualization Controls</div>
+    
+    <div style="margin-bottom:12px;">
+        <input id="node-search" type="search" placeholder="Search nodes..." style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+        <button id="clear-search" class="btn btn-small" style="margin-top:5px; width:100%;">Clear Search</button>
+    </div>
+    
+    <!-- Advanced Search Section (Collapsible) -->
+    <div style="margin-bottom:12px;">
+        <button id="toggle-advanced-search" class="btn btn-small" style="width:100%; background:#FF9800; color:white;">
+            🔍 Advanced Search
+        </button>
+    </div>
+    
+    <div id="advanced-search-panel" style="display:none; border:2px solid #FF9800; border-radius:6px; padding:12px; margin-bottom:12px; background:#fff3e0;">
+        <div style="font-weight:bold; margin-bottom:8px; color:#FF6F00;">📍 Question Path Search</div>
+        <div style="font-size:0.85em; color:#666; margin-bottom:10px;">
+            Find connection paths between questions through shared knowledge across books
+        </div>
+        
+        <div style="margin-bottom:8px;">
+            <label style="display:block; font-size:0.9em; margin-bottom:3px;">Start Question:</label>
+            <select id="start-question" style="width:100%; padding:6px; border-radius:4px; border:1px solid #ccc; font-size:0.85em;">
+                <option value="">-- Select a question --</option>
+            </select>
+            <button id="set-start-from-node" class="btn btn-small" style="width:100%; margin-top:5px; background:#2196F3; color:white; font-size:0.8em; padding:4px;" disabled>
+                ← Use Selected Node as Start
+            </button>
+        </div>
+        
+        <div style="margin-bottom:10px;">
+            <label style="display:block; font-size:0.9em; margin-bottom:3px;">End Question:</label>
+            <select id="end-question" style="width:100%; padding:6px; border-radius:4px; border:1px solid #ccc; font-size:0.85em;">
+                <option value="">-- Select a question --</option>
+            </select>
+            <button id="set-end-from-node" class="btn btn-small" style="width:100%; margin-top:5px; background:#2196F3; color:white; font-size:0.8em; padding:4px;" disabled>
+                ← Use Selected Node as End
+            </button>
+        </div>
+        
+        <button id="find-path-btn" class="btn btn-small" style="width:100%; background:#FF9800; color:white;" disabled>
+            Find Question Path
+        </button>
+        
+        <div id="path-result" style="margin-top:10px; display:none;"></div>
+        
+        <div id="consistency-check-section" style="margin-top:10px; display:none;">
+            <button id="consistency-check-btn" class="btn btn-small" style="width:100%; background:#4CAF50; color:white;">
+                🔬 Do Consistency Check
+            </button>
+            <div id="consistency-result" style="margin-top:10px; display:none;"></div>
+        </div>
+        
+        <div id="narrative-analysis-section" style="margin-top:10px; display:none;">
+            <button id="narrative-analysis-btn" class="btn btn-small" style="width:100%; background:#9C27B0; color:white;">
+                📝 Do Narrative Analysis
+            </button>
+            <div id="narrative-result" style="margin-top:10px; display:none;"></div>
+        </div>
+    </div>
+    
+    <div style="margin-bottom:12px;">
+        <label style="font-weight:bold; display:block; margin-bottom:5px;">Hierarchy Levels:</label>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <input type="range" id="level-slider" min="1" max="4" value="4" style="flex:1;">
+            <span id="level-value" style="font-weight:bold; min-width:20px;">4</span>
+        </div>
+        <div style="font-size:0.85em; color:#666; margin-top:3px;">
+            1: Categories | 2: +Keywords | 3: +Questions | 4: +Books
+        </div>
+    </div>
+    
+    <div style="margin-bottom:12px;">
+        <label style="font-weight:bold; display:block; margin-bottom:5px;">Filter by Category:</label>
+        <select id="category-filter" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+            <option value="">All Categories</option>
+        </select>
+    </div>
+    
+    <div style="margin-bottom:12px;">
+        <label style="font-weight:bold; display:block; margin-bottom:5px;">Filter by Doctrine:</label>
+        <select id="doctrine-filter" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+            <option value="">All Doctrines</option>
+        </select>
+    </div>
+    
+    <div style="margin-bottom:12px;">
+        <button id="fa2-toggle" class="btn btn-small" style="width:100%;">Start ForceAtlas</button>
+        <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+            <label style="margin:0; white-space:nowrap;">Speed:</label>
+            <input type="range" id="fa2-speed" min="1" max="10" step="1" value="1" style="flex:1;">
+            <span id="fa2-speed-value" style="min-width:30px;">1x</span>
+        </div>
+    </div>
+    
+    <div style="margin-bottom:12px;">
+        <button id="copy-json" class="btn btn-small" style="width:100%;">Copy JSON Data</button>
+    </div>
+    
+    <!-- Camera Controls Section -->
+    <div style="border-top:2px solid #4CAF50; padding-top:12px; margin-top:12px;">
+        <div style="font-weight:bold; margin-bottom:10px;">Camera Controls</div>
+        <button type="button" id="reset-camera" class="btn btn-small" style="width:100%;">Reset Camera</button>
+    </div>
+</div>
+
+<!-- Node Info Panel -->
+<button id="toggle-info" class="toggle-btn collapsed">ℹ️ Node Details</button>
+<div id="info-panel" class="overlay-panel">
+    <button class="close-panel" onclick="togglePanel('info')">✕</button>
+    <div class="panel-header">Node Details</div>
+    <div id="node-details-placeholder">Click a node to view details. Double-click a book to view its network.</div>
+</div>
+
+<!-- Screenshot Button -->
+<button id="screenshot-btn">📸 Screenshot</button>
+
+<!-- Consistency Report Modal -->
+<div id="consistency-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10000; overflow:auto;">
+    <div style="position:relative; max-width:800px; margin:50px auto; background:white; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+        <div style="padding:20px; border-bottom:2px solid #FF9800;">
+            <h2 style="margin:0; color:#FF6F00;">🔬 Consistency Analysis Report</h2>
+            <button onclick="document.getElementById('consistency-modal').style.display='none'" style="position:absolute; top:15px; right:15px; background:#f44336; color:white; border:none; border-radius:50%; width:30px; height:30px; cursor:pointer; font-size:18px; line-height:1;">✕</button>
+        </div>
+        <div id="consistency-modal-content" style="padding:20px; max-height:70vh; overflow-y:auto;">
+            <!-- Content will be inserted here -->
+        </div>
+    </div>
+</div>
+
+<!-- Narrative Analysis Modal -->
+<div id="narrative-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10000; overflow:auto;">
+    <div style="position:relative; max-width:900px; margin:50px auto; background:white; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+        <div style="padding:20px; border-bottom:2px solid #9C27B0;">
+            <h2 style="margin:0; color:#7B1FA2;">📝 Narrative Analysis</h2>
+            <button onclick="document.getElementById('narrative-modal').style.display='none'" style="position:absolute; top:15px; right:15px; background:#f44336; color:white; border:none; border-radius:50%; width:30px; height:30px; cursor:pointer; font-size:18px; line-height:1;">✕</button>
+        </div>
+        <div id="narrative-modal-content" style="padding:20px; max-height:70vh; overflow-y:auto;">
+            <!-- Content will be inserted here -->
+        </div>
+    </div>
+</div>
+
+<script>
+// Toggle panel visibility
+function togglePanel(panelName) {
+    const panel = document.getElementById(panelName + '-panel');
+    const toggle = document.getElementById('toggle-' + panelName);
+    
+    if (panel.classList.contains('collapsed')) {
+        panel.classList.remove('collapsed');
+        toggle.classList.add('collapsed');
+    } else {
+        panel.classList.add('collapsed');
+        toggle.classList.remove('collapsed');
+    }
+}
+
+// Add click handlers for toggle buttons
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('toggle-header').addEventListener('click', function() {
+        togglePanel('header');
+    });
+    
+    document.getElementById('toggle-controls').addEventListener('click', function() {
+        togglePanel('controls');
+    });
+    
+    document.getElementById('toggle-info').addEventListener('click', function() {
+        togglePanel('info');
+    });
+});
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='vendor/graphology.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/sigma.umd.min.js') }}"></script>
+<script>
+// Global network visualization with Sigma.js
+async function initGraph() {
+    try {
+        const container = document.getElementById('sigma-container');
+        
+        // Fetch global network data from the backend
+        const response = await fetch('/api/global_network_data');
+        const data = await response.json();
+        
+        // Create graph
+        const graph = new graphology.Graph();
+        
+        // Add nodes to graph
+        data.nodes.forEach(node => {
+            graph.addNode(node.id, {
+                label: node.label,
+                color: node.color,
+                originalColor: node.color,  // Store original color for restoring after search
+                size: node.size,
+                type: 'circle',
+                x: Math.random(),
+                y: Math.random(),
+                nodeType: node.type,
+                document_id: node.document_id || null,
+                full_title: node.full_title || null,
+                full_question: node.full_question || null,
+                category: node.category || null,
+                doctrine: node.doctrine || null,
+                orig_size: node.size
+            });
+        });
+        
+        // Populate category filter dropdown
+        const categoryFilterDropdown = document.getElementById('category-filter');
+        const categories = new Set();
+        data.nodes.forEach(node => {
+            if (node.type === 'category' && node.category) {
+                categories.add(node.category);
+            }
+        });
+        Array.from(categories).sort().forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat;
+            option.textContent = cat;
+            categoryFilterDropdown.appendChild(option);
+        });
+        
+        // Populate doctrine filter dropdown
+        const doctrineFilterDropdown = document.getElementById('doctrine-filter');
+        const doctrines = new Set();
+        data.nodes.forEach(node => {
+            if (node.type === 'book' && node.doctrine && node.doctrine !== 'Uncategorized') {
+                doctrines.add(node.doctrine);
+            }
+        });
+        Array.from(doctrines).sort().forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc;
+            option.textContent = doc;
+            doctrineFilterDropdown.appendChild(option);
+        });
+        
+        // Add edges to graph
+        data.edges.forEach(edge => {
+            graph.addEdge(edge.source, edge.target, {
+                size: edge.size || 1,
+                color: edge.color || '#999'
+            });
+        });
+        
+        // Create Sigma instance
+        const renderer = new Sigma(graph, container, {
+            renderLabels: true,
+            renderEdgeLabels: false
+        });
+        
+        // Reset camera button
+        const resetButton = document.getElementById('reset-camera');
+        resetButton.addEventListener('click', () => {
+            renderer.getCamera().animatedReset({ duration: 600 });
+        });
+        
+        // Handle level slider
+        const levelSlider = document.getElementById('level-slider');
+        const levelValue = document.getElementById('level-value');
+        const categoryFilter = document.getElementById('category-filter');
+        const doctrineFilter = document.getElementById('doctrine-filter');
+        
+        // Store original data for filtering
+        const allNodes = data.nodes;
+        const allEdges = data.edges;
+        
+        // Rebuild graph based on current filters
+        function rebuildGraph() {
+            const level = parseInt(levelSlider.value);
+            const selectedCategory = categoryFilter.value;
+            const selectedDoctrine = doctrineFilter.value;
+            
+            // Level to type mapping
+            const typesByLevel = {
+                1: ['category'],
+                2: ['category', 'keyword'],
+                3: ['category', 'keyword', 'question'],
+                4: ['category', 'keyword', 'question', 'book']
+            };
+            
+            const allowedTypes = typesByLevel[level] || [];
+            
+            // Clear and rebuild graph
+            graph.clear();
+            
+            // Filter by level and category
+            let filteredNodes = allNodes.filter(n => allowedTypes.includes(n.type));
+            
+            if (selectedCategory) {
+                filteredNodes = filteredNodes.filter(n => n.category === selectedCategory);
+            }
+            
+            if (selectedDoctrine) {
+                filteredNodes = filteredNodes.filter(n => {
+                    // Keep all non-book nodes, but filter books by doctrine
+                    if (n.type === 'book') {
+                        return n.doctrine === selectedDoctrine;
+                    }
+                    return true;
+                });
+            }
+            
+            const nodeIds = new Set(filteredNodes.map(n => n.id));
+            const filteredEdges = allEdges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
+            
+            filteredNodes.forEach(node => {
+                graph.addNode(node.id, {
+                    label: node.label,
+                    color: node.color,
+                    originalColor: node.color,  // Store original color for search restore
+                    size: node.size,
+                    type: 'circle',
+                    x: Math.random(),
+                    y: Math.random(),
+                    nodeType: node.type,
+                    document_id: node.document_id || null,
+                    full_title: node.full_title || null,
+                    full_question: node.full_question || null,
+                    category: node.category || null,
+                    doctrine: node.doctrine || null,
+                    orig_size: node.size
+                });
+            });
+            
+            filteredEdges.forEach(edge => {
+                graph.addEdge(edge.source, edge.target, {
+                    size: edge.size || 1,
+                    color: edge.color || '#999'
+                });
+            });
+        }
+        
+        levelSlider.addEventListener('change', (e) => {
+            const level = parseInt(e.target.value);
+            levelValue.textContent = level;
+            rebuildGraph();
+        });
+        
+        categoryFilter.addEventListener('change', () => {
+            rebuildGraph();
+        });
+        
+        doctrineFilter.addEventListener('change', () => {
+            rebuildGraph();
+        });
+        
+        // ForceAtlas2 simulation
+        let fa2Running = false;
+        let fa2Frame = null;
+        const fa2Toggle = document.getElementById('fa2-toggle');
+        const fa2SpeedSlider = document.getElementById('fa2-speed');
+        const fa2SpeedValue = document.getElementById('fa2-speed-value');
+        
+        fa2SpeedSlider.addEventListener('input', (e) => {
+            const speed = parseFloat(e.target.value);
+            fa2SpeedValue.textContent = speed.toFixed(1) + 'x';
+        });
+        
+        function getFA2Speed() {
+            return parseFloat(fa2SpeedSlider.value) || 1.0;
+        }
+        
+        function fa2Step() {
+            const speed = getFA2Speed();
+            const nodes = [];
+            graph.forEachNode((n, a) => nodes.push({ id: n, x: a.x, y: a.y }));
+            
+            const nodeCount = nodes.length;
+            const disps = Object.create(null);
+            nodes.forEach(n => { disps[n.id] = { dx: 0, dy: 0 }; });
+            
+            // Repulsion
+            const repulsion = 0.0006 * speed;
+            for (let i = 0; i < nodeCount; i++) {
+                for (let j = i + 1; j < nodeCount; j++) {
+                    const a = nodes[i];
+                    const b = nodes[j];
+                    let vx = a.x - b.x;
+                    let vy = a.y - b.y;
+                    let dist2 = vx * vx + vy * vy + 1e-6;
+                    let dist = Math.sqrt(dist2);
+                    let force = repulsion / dist2;
+                    disps[a.id].dx += (vx / dist) * force;
+                    disps[a.id].dy += (vy / dist) * force;
+                    disps[b.id].dx -= (vx / dist) * force;
+                    disps[b.id].dy -= (vy / dist) * force;
+                }
+            }
+            
+            // Attraction
+            const springStiffness = 0.008 * speed;
+            const idealLength = 0.08;
+            graph.forEachEdge((edge, attr, source, target) => {
+                const sx = graph.getNodeAttribute(source, 'x');
+                const sy = graph.getNodeAttribute(source, 'y');
+                const tx = graph.getNodeAttribute(target, 'x');
+                const ty = graph.getNodeAttribute(target, 'y');
+                let vx = sx - tx;
+                let vy = sy - ty;
+                let dist = Math.sqrt(vx * vx + vy * vy) + 1e-6;
+                let diff = dist - idealLength;
+                let f = springStiffness * diff;
+                disps[source].dx -= (vx / dist) * f;
+                disps[source].dy -= (vy / dist) * f;
+                disps[target].dx += (vx / dist) * f;
+                disps[target].dy += (vy / dist) * f;
+            });
+            
+            // Integrate
+            const damping = 0.6;
+            const maxMove = 0.08 * speed;
+            nodes.forEach(n => {
+                const d = disps[n.id];
+                let dx = d.dx * damping;
+                let dy = d.dy * damping;
+                const m = Math.sqrt(dx * dx + dy * dy);
+                if (m > maxMove) {
+                    dx = (dx / m) * maxMove;
+                    dy = (dy / m) * maxMove;
+                }
+                const nx = n.x + dx;
+                const ny = n.y + dy;
+                graph.setNodeAttribute(n.id, 'x', nx);
+                graph.setNodeAttribute(n.id, 'y', ny);
+            });
+            
+            try {
+                if (typeof renderer.refresh === 'function') renderer.refresh();
+                else if (typeof renderer.render === 'function') renderer.render();
+            } catch (e) {}
+        }
+        
+        function fa2Loop() {
+            fa2Step();
+            if (fa2Running) fa2Frame = requestAnimationFrame(fa2Loop);
+        }
+        
+        function startFA2() {
+            if (fa2Running) return;
+            fa2Running = true;
+            fa2Toggle.textContent = 'Stop ForceAtlas';
+            fa2Loop();
+        }
+        
+        function stopFA2() {
+            fa2Running = false;
+            if (fa2Frame) cancelAnimationFrame(fa2Frame);
+            fa2Frame = null;
+            fa2Toggle.textContent = 'Start ForceAtlas';
+        }
+        
+        fa2Toggle.addEventListener('click', () => {
+            if (!fa2Running) startFA2(); else stopFA2();
+        });
+        
+        // Copy JSON button
+        const copyButton = document.getElementById('copy-json');
+        copyButton.addEventListener('click', () => {
+            navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => {
+                copyButton.textContent = 'Copied!';
+                setTimeout(() => {
+                    copyButton.textContent = 'Copy JSON data';
+                }, 2000);
+            });
+        });
+        
+        // Node search
+        const nodeSearch = document.getElementById('node-search');
+        const clearSearch = document.getElementById('clear-search');
+        
+        function applySearchFilter(query) {
+            const q = (query || '').trim().toLowerCase();
+            if (!q) {
+                // Clear search - restore original colors and sizes
+                graph.forEachNode((node, attr) => {
+                    const orig = graph.getNodeAttribute(node, 'orig_size') || attr.size || 8;
+                    graph.setNodeAttribute(node, 'size', orig);
+                    const origColor = graph.getNodeAttribute(node, 'originalColor') || attr.color || '#999';
+                    graph.setNodeAttribute(node, 'color', origColor);
+                });
+                try { renderer.refresh(); } catch(e) {}
+                return;
+            }
+            
+            graph.forEachNode((node, attr) => {
+                const label = (attr.label || '').toString().toLowerCase();
+                const match = label.includes(q);
+                const orig = graph.getNodeAttribute(node, 'orig_size') || attr.size || 8;
+                if (match) {
+                    graph.setNodeAttribute(node, 'size', orig);
+                    const origColor = graph.getNodeAttribute(node, 'originalColor') || attr.color || '#999';
+                    graph.setNodeAttribute(node, 'color', origColor);
+                } else {
+                    graph.setNodeAttribute(node, 'size', Math.max(1, Math.round(orig * 0.35)));
+                    graph.setNodeAttribute(node, 'color', '#e0e0e0');
+                }
+            });
+            try { renderer.refresh(); } catch(e) {}
+        }
+        
+        nodeSearch.addEventListener('input', (e) => {
+            applySearchFilter(e.target.value);
+        });
+        
+        clearSearch.addEventListener('click', () => {
+            nodeSearch.value = '';
+            applySearchFilter('');
+        });
+        
+        // Node info panel
+        const infoPanel = document.getElementById('info-panel');
+        const infoPlaceholder = document.getElementById('node-details-placeholder');
+        
+        // Track currently selected question node
+        let selectedQuestionNode = null;
+        
+        function showNodeDetails(nodeId) {
+            if (!graph.hasNode(nodeId)) return;
+            const attr = graph.getNodeAttributes(nodeId);
+            
+            // Update selected question tracking
+            if (attr.nodeType === 'question' && attr.full_question) {
+                selectedQuestionNode = {
+                    id: nodeId,
+                    question: attr.full_question
+                };
+                // Enable the selection buttons
+                document.getElementById('set-start-from-node').disabled = false;
+                document.getElementById('set-end-from-node').disabled = false;
+            } else {
+                selectedQuestionNode = null;
+                // Disable the selection buttons
+                document.getElementById('set-start-from-node').disabled = true;
+                document.getElementById('set-end-from-node').disabled = true;
+            }
+            
+            const connected = new Set();
+            graph.forEachNeighbor(nodeId, n => connected.add(n));
+            
+            const html = [];
+            
+            // Show different info based on node type
+            html.push(`<div style="margin-bottom:10px;"><strong>Type:</strong> ${attr.nodeType}</div>`);
+            
+            if (attr.nodeType === 'book') {
+                html.push(`<div style="margin-bottom:10px;"><strong>Title:</strong> ${attr.full_title || attr.label}</div>`);
+                html.push(`<div style="margin-bottom:10px; padding:10px; background:#f0f0f0; border-radius:4px; font-style:italic;">💡 Double-click this book to view its network</div>`);
+            } else if (attr.nodeType === 'question') {
+                html.push(`<div style="margin-bottom:10px;"><strong>Question:</strong> ${attr.full_question || attr.label}</div>`);
+                html.push(`<div style="margin-bottom:10px; padding:10px; background:#E3F2FD; border:2px solid #2196F3; border-radius:4px;">
+                    <div style="font-weight:bold; color:#1976D2; margin-bottom:5px;">📍 Question Node Selected</div>
+                    <div style="font-size:0.85em; color:#555;">You can now use this question in the Question Path Search below by clicking "Use Selected Node" buttons.</div>
+                </div>`);
+            } else {
+                html.push(`<div style="margin-bottom:10px;"><strong>Label:</strong> ${attr.label}</div>`);
+            }
+            
+            // Connected nodes
+            html.push('<div style="margin-bottom:5px;"><strong>Connected Nodes:</strong></div>');
+            if (connected.size > 0) {
+                html.push('<ul style="margin:0; padding-left:20px; max-height:150px; overflow-y:auto;">');
+                Array.from(connected).forEach(cid => {
+                    const a = graph.getNodeAttributes(cid) || {};
+                    html.push(`<li><a href="#" data-node="${cid}" class="connector-link">${escapeHtml(a.label || cid)}</a></li>`);
+                });
+                html.push('</ul>');
+            } else {
+                html.push('<div style="color:#666; font-style:italic;">No connected nodes</div>');
+            }
+            
+            infoPlaceholder.innerHTML = html.join('');
+            
+            // Wire connector link clicks
+            infoPlaceholder.querySelectorAll('.connector-link').forEach(el => {
+                el.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    const nid = ev.currentTarget.getAttribute('data-node');
+                    const x = graph.getNodeAttribute(nid, 'x');
+                    const y = graph.getNodeAttribute(nid, 'y');
+                    renderer.getCamera().animate({ x, y, duration: 400 });
+                    showNodeDetails(nid);
+                });
+            });
+        }
+        
+        function escapeHtml(s) {
+            if (!s) return '';
+            return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+        }
+        
+        // Click handler
+        renderer.on('clickNode', ({ node }) => {
+            showNodeDetails(node);
+        });
+        
+        // Double-click handler for books - navigate to book's network
+        renderer.on('doubleClickNode', ({ node }) => {
+            const attr = graph.getNodeAttributes(node);
+            if (attr.nodeType === 'book' && attr.document_id) {
+                window.location.href = `/view/${attr.document_id}`;
+            }
+        });
+        
+        // Screenshot functionality
+        const screenshotBtn = document.getElementById('screenshot-btn');
+        screenshotBtn.addEventListener('click', () => {
+            try {
+                const fileName = 'global_network.png';
+                
+                const exportCanvas = document.createElement('canvas');
+                const sigmaContainer = document.getElementById('sigma-container');
+                exportCanvas.width = sigmaContainer.offsetWidth * 2;
+                exportCanvas.height = sigmaContainer.offsetHeight * 2;
+                const ctx = exportCanvas.getContext('2d');
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+                
+                const camera = renderer.getCamera();
+                const cameraState = camera.getState();
+                const ratio = exportCanvas.width / sigmaContainer.offsetWidth;
+                
+                // Render edges
+                ctx.strokeStyle = '#999';
+                ctx.lineWidth = 1;
+                graph.forEachEdge((edge, attr, source, target) => {
+                    const sourceNode = graph.getNodeAttributes(source);
+                    const targetNode = graph.getNodeAttributes(target);
+                    const sourcePos = renderer.graphToViewport({x: sourceNode.x, y: sourceNode.y});
+                    const targetPos = renderer.graphToViewport({x: targetNode.x, y: targetNode.y});
+                    ctx.beginPath();
+                    ctx.moveTo(sourcePos.x * ratio, sourcePos.y * ratio);
+                    ctx.lineTo(targetPos.x * ratio, targetPos.y * ratio);
+                    ctx.stroke();
+                });
+                
+                // Render nodes
+                graph.forEachNode((node, attr) => {
+                    const pos = renderer.graphToViewport({x: attr.x, y: attr.y});
+                    const screenX = pos.x * ratio;
+                    const screenY = pos.y * ratio;
+                    const screenSize = (attr.size || 8) * ratio / cameraState.ratio;
+                    
+                    ctx.fillStyle = attr.color || '#999';
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, screenSize, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = screenSize * 0.15;
+                    ctx.stroke();
+                });
+                
+                // Render labels
+                ctx.fillStyle = '#000';
+                ctx.font = `${12 * ratio}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                graph.forEachNode((node, attr) => {
+                    if (attr.label) {
+                        const pos = renderer.graphToViewport({x: attr.x, y: attr.y});
+                        const screenX = pos.x * ratio;
+                        const screenY = pos.y * ratio;
+                        const screenSize = (attr.size || 8) * ratio / cameraState.ratio;
+                        const labelY = screenY + screenSize + 15 * ratio;
+                        const labelText = attr.label.length > 20 ? attr.label.substring(0, 20) + '...' : attr.label;
+                        const textWidth = ctx.measureText(labelText).width;
+                        
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                        ctx.fillRect(screenX - textWidth/2 - 4, labelY - 10, textWidth + 8, 20);
+                        
+                        ctx.fillStyle = '#000';
+                        ctx.fillText(labelText, screenX, labelY);
+                    }
+                });
+                
+                exportCanvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = fileName;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                    
+                    screenshotBtn.textContent = '✓ Saved!';
+                    setTimeout(() => {
+                        screenshotBtn.innerHTML = '📸 Screenshot';
+                    }, 2000);
+                }, 'image/png');
+                
+            } catch (err) {
+                console.error('Screenshot error:', err);
+                alert('Failed to capture screenshot: ' + err.message);
+            }
+        });
+        
+        console.log('Global network initialized with ' + data.nodes.length + ' nodes and ' + data.edges.length + ' edges');
+        
+        // Advanced Search toggle handler
+        const toggleAdvancedSearch = document.getElementById('toggle-advanced-search');
+        const advancedSearchPanel = document.getElementById('advanced-search-panel');
+        
+        toggleAdvancedSearch.addEventListener('click', () => {
+            const isHidden = advancedSearchPanel.style.display === 'none';
+            advancedSearchPanel.style.display = isHidden ? 'block' : 'none';
+            toggleAdvancedSearch.textContent = isHidden ? '🔍 Hide Advanced Search' : '🔍 Advanced Search';
+        });
+        
+        // Populate question dropdowns for question path search
+        const startQuestionSelect = document.getElementById('start-question');
+        const endQuestionSelect = document.getElementById('end-question');
+        const findPathBtn = document.getElementById('find-path-btn');
+        const pathResult = document.getElementById('path-result');
+        const consistencyCheckSection = document.getElementById('consistency-check-section');
+        const consistencyCheckBtn = document.getElementById('consistency-check-btn');
+        const consistencyResult = document.getElementById('consistency-result');
+        
+        // Store current path data
+        let currentPathData = null;
+        
+        // Get all unique questions from the network
+        const questions = [];
+        data.nodes.forEach(node => {
+            if (node.type === 'question' && node.full_question) {
+                questions.push(node.full_question);
+            }
+        });
+        
+        // Sort and populate dropdowns
+        questions.sort().forEach(q => {
+            const option1 = document.createElement('option');
+            option1.value = q;
+            option1.textContent = q.length > 80 ? q.substring(0, 80) + '...' : q;
+            option1.title = q; // Full text on hover
+            startQuestionSelect.appendChild(option1);
+            
+            const option2 = document.createElement('option');
+            option2.value = q;
+            option2.textContent = q.length > 80 ? q.substring(0, 80) + '...' : q;
+            option2.title = q;
+            endQuestionSelect.appendChild(option2);
+        });
+        
+        // Enable/disable find path button
+        function updateFindPathButton() {
+            const start = startQuestionSelect.value;
+            const end = endQuestionSelect.value;
+            findPathBtn.disabled = !start || !end || start === end;
+        }
+        
+        startQuestionSelect.addEventListener('change', updateFindPathButton);
+        endQuestionSelect.addEventListener('change', updateFindPathButton);
+        
+        // Helper function to render a single path display
+        function renderPathDisplay(path, pathIndex, totalPaths) {
+            let html = '<div style="font-size:0.85em; background:#fff; padding:10px; border-radius:4px; border:1px solid #ddd;">';
+            html += `<div style="font-weight:bold; margin-bottom:8px;">Connection Path ${totalPaths > 1 ? (pathIndex + 1) + ' of ' + totalPaths : ''}:</div>`;
+            
+            path.forEach((step, index) => {
+                html += `<div style="margin-bottom:8px; padding:8px; background:#f8f9fa; border-left:3px solid #4CAF50; border-radius:3px;">`;
+                html += `<div style="font-weight:bold; color:#2c3e50;">Step ${index + 1}: ${step.book_title}</div>`;
+                
+                if (index === 0) {
+                    html += `<div style="color:#666; font-size:0.9em; margin-top:4px;">📍 Contains start question</div>`;
+                } else if (step.shared_question) {
+                    html += `<div style="color:#666; font-size:0.9em; margin-top:4px;">🔗 Shares: "${step.shared_question.substring(0, 60)}${step.shared_question.length > 60 ? '...' : ''}"</div>`;
+                }
+                
+                if (index === path.length - 1) {
+                    html += `<div style="color:#666; font-size:0.9em; margin-top:4px;">🎯 Contains end question</div>`;
+                }
+                
+                html += '</div>';
+            });
+            
+            html += '</div>';
+            return html;
+        }
+        
+        // Helper function to highlight paths on the network
+        // Uses detailed_paths structure from backend with pre-computed questions
+        function highlightPaths(detailedPaths, selectedPathIndex = null) {
+            console.log('highlightPaths called with:', detailedPaths, 'selectedIndex:', selectedPathIndex);
+            
+            // Reset all node and edge styles first
+            graph.forEachNode((node) => {
+                const attr = graph.getNodeAttributes(node);
+                graph.setNodeAttribute(node, 'color', attr.originalColor || attr.color);
+                graph.setNodeAttribute(node, 'size', attr.originalSize || attr.size);
+            });
+            
+            graph.forEachEdge((edge) => {
+                const attr = graph.getEdgeAttributes(edge);
+                graph.setEdgeAttribute(edge, 'color', attr.originalColor || attr.color);
+                graph.setEdgeAttribute(edge, 'size', attr.originalSize || attr.size);
+            });
+            
+            // Determine which paths to highlight
+            const pathsToHighlight = selectedPathIndex !== null ? [detailedPaths[selectedPathIndex]] : detailedPaths;
+            const otherPaths = selectedPathIndex !== null ? detailedPaths.filter((_, idx) => idx !== selectedPathIndex) : [];
+            
+            console.log('pathsToHighlight:', pathsToHighlight);
+            
+            // Highlight each selected path with red
+            pathsToHighlight.forEach((detailedPath) => {
+                console.log('Processing path:', detailedPath);
+                
+                // Highlight books and their questions
+                detailedPath.books.forEach((bookInfo) => {
+                    console.log('Processing book:', bookInfo.book_title, 'with', bookInfo.questions.length, 'questions');
+                    
+                    const bookNodeId = `book_${bookInfo.book_id}`;
+                    
+                    // Check if book node exists in graph
+                    if (!graph.hasNode(bookNodeId)) {
+                        console.log('Book node not found:', bookNodeId);
+                        return;
+                    }
+                    
+                    const bookAttr = graph.getNodeAttributes(bookNodeId);
+                    
+                    // Save original attributes
+                    if (!bookAttr.originalColor) {
+                        graph.setNodeAttribute(bookNodeId, 'originalColor', bookAttr.color);
+                        graph.setNodeAttribute(bookNodeId, 'originalSize', bookAttr.size);
+                    }
+                    
+                    // Highlight book node with DARK RED (different from questions)
+                    graph.setNodeAttribute(bookNodeId, 'color', '#8B0000'); // Dark red for books
+                    graph.setNodeAttribute(bookNodeId, 'size', bookAttr.originalSize * 2.5);
+                    console.log('Highlighted book:', bookInfo.book_title);
+                    
+                    // Highlight all questions for this book
+                    bookInfo.questions.forEach((questionText) => {
+                        console.log('Looking for question:', questionText.substring(0, 50) + '...');
+                        
+                        let foundQuestion = false;
+                        // Find the question node in the graph
+                        graph.forEachNode((nodeId, nodeAttr) => {
+                            if (nodeAttr.nodeType === 'question' && nodeAttr.full_question === questionText) {
+                                foundQuestion = true;
+                                console.log('Found matching question node:', nodeId);
+                                
+                                // Save original attributes
+                                if (!nodeAttr.originalColor) {
+                                    graph.setNodeAttribute(nodeId, 'originalColor', nodeAttr.color);
+                                    graph.setNodeAttribute(nodeId, 'originalSize', nodeAttr.size);
+                                }
+                                
+                                // Highlight question node with RED
+                                graph.setNodeAttribute(nodeId, 'color', '#f44336'); // Red
+                                graph.setNodeAttribute(nodeId, 'size', nodeAttr.originalSize * 2.5);
+                                console.log('Highlighted question node:', nodeId);
+                                
+                                // Highlight edge between question and book
+                                graph.forEachEdge((edgeId, edgeAttr, source, target) => {
+                                    if ((source === nodeId && target === bookNodeId) || 
+                                        (source === bookNodeId && target === nodeId)) {
+                                        
+                                        if (!edgeAttr.originalColor) {
+                                            graph.setEdgeAttribute(edgeId, 'originalColor', edgeAttr.color);
+                                            graph.setEdgeAttribute(edgeId, 'originalSize', edgeAttr.size);
+                                        }
+                                        
+                                        graph.setEdgeAttribute(edgeId, 'color', '#f44336'); // Red
+                                        graph.setEdgeAttribute(edgeId, 'size', 4);
+                                        console.log('Highlighted edge:', edgeId);
+                                    }
+                                });
+                            }
+                        });
+                        
+                        if (!foundQuestion) {
+                            console.log('Question not found in graph:', questionText.substring(0, 50) + '...');
+                        }
+                    });
+                });
+            });
+            
+            // Highlight other paths (when one is selected) with lighter color
+            if (selectedPathIndex !== null && otherPaths.length > 0) {
+                otherPaths.forEach((detailedPath) => {
+                    detailedPath.books.forEach(bookInfo => {
+                        const bookNodeId = `book_${bookInfo.book_id}`;
+                        
+                        if (!graph.hasNode(bookNodeId)) return;
+                        
+                        const bookAttr = graph.getNodeAttributes(bookNodeId);
+                        
+                        if (!bookAttr.originalColor) {
+                            graph.setNodeAttribute(bookNodeId, 'originalColor', bookAttr.color);
+                            graph.setNodeAttribute(bookNodeId, 'originalSize', bookAttr.size);
+                        }
+                        
+                        // Only highlight if not already highlighted in red
+                        if (bookAttr.color !== '#f44336') {
+                            graph.setNodeAttribute(bookNodeId, 'color', '#FFB74D'); // Light Orange
+                            graph.setNodeAttribute(bookNodeId, 'size', bookAttr.originalSize * 1.5);
+                        }
+                    });
+                });
+            }
+            
+            // Refresh the renderer
+            renderer.refresh();
+        }
+        
+        // "Use Selected Node" button handlers
+        const setStartFromNodeBtn = document.getElementById('set-start-from-node');
+        const setEndFromNodeBtn = document.getElementById('set-end-from-node');
+        
+        setStartFromNodeBtn.addEventListener('click', () => {
+            if (selectedQuestionNode && selectedQuestionNode.question) {
+                // Find and select the option in the dropdown
+                const options = startQuestionSelect.options;
+                for (let i = 0; i < options.length; i++) {
+                    if (options[i].value === selectedQuestionNode.question) {
+                        startQuestionSelect.selectedIndex = i;
+                        updateFindPathButton();
+                        
+                        // Show feedback
+                        setStartFromNodeBtn.textContent = '✓ Start Question Set!';
+                        setStartFromNodeBtn.style.background = '#4CAF50';
+                        setTimeout(() => {
+                            setStartFromNodeBtn.textContent = '← Use Selected Node as Start';
+                            setStartFromNodeBtn.style.background = '#2196F3';
+                        }, 1500);
+                        
+                        break;
+                    }
+                }
+            }
+        });
+        
+        setEndFromNodeBtn.addEventListener('click', () => {
+            if (selectedQuestionNode && selectedQuestionNode.question) {
+                // Find and select the option in the dropdown
+                const options = endQuestionSelect.options;
+                for (let i = 0; i < options.length; i++) {
+                    if (options[i].value === selectedQuestionNode.question) {
+                        endQuestionSelect.selectedIndex = i;
+                        updateFindPathButton();
+                        
+                        // Show feedback
+                        setEndFromNodeBtn.textContent = '✓ End Question Set!';
+                        setEndFromNodeBtn.style.background = '#4CAF50';
+                        setTimeout(() => {
+                            setEndFromNodeBtn.textContent = '← Use Selected Node as End';
+                            setEndFromNodeBtn.style.background = '#2196F3';
+                        }, 1500);
+                        
+                        break;
+                    }
+                }
+            }
+        });
+        
+        // Find path button handler
+        findPathBtn.addEventListener('click', async () => {
+            const startQ = startQuestionSelect.value;
+            const endQ = endQuestionSelect.value;
+            
+            if (!startQ || !endQ || startQ === endQ) return;
+            
+            findPathBtn.disabled = true;
+            findPathBtn.textContent = 'Searching...';
+            pathResult.style.display = 'none';
+            consistencyCheckSection.style.display = 'none'; // Hide consistency check
+            const narrativeAnalysisSection = document.getElementById('narrative-analysis-section');
+            narrativeAnalysisSection.style.display = 'none'; // Hide narrative analysis
+            consistencyResult.innerHTML = ''; // Clear previous results
+            document.getElementById('narrative-result').innerHTML = ''; // Clear narrative results
+            currentPathData = null; // Clear path data
+            
+            // Get current filter values
+            const selectedCategory = categoryFilter.value;
+            const selectedDoctrine = doctrineFilter.value;
+            
+            try {
+                const response = await fetch('/api/find-question-path', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        start_question: startQ,
+                        end_question: endQ,
+                        category_filter: selectedCategory,
+                        doctrine_filter: selectedDoctrine
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    pathResult.innerHTML = `
+                        <div style="background:#f8d7da; color:#721c24; padding:10px; border-radius:4px; border:1px solid #f5c6cb;">
+                            <strong>Error:</strong> ${result.error}
+                        </div>
+                    `;
+                    pathResult.style.display = 'block';
+                } else if (result.found) {
+                    // Store path data for consistency check (use first path for consistency check)
+                    currentPathData = {
+                        ...result,
+                        path: result.paths[0]  // Use first path for consistency
+                    };
+                    
+                    // Highlight all paths on the network using detailed_paths
+                    if (result.detailed_paths && result.detailed_paths.length > 0) {
+                        highlightPaths(result.detailed_paths);
+                    }
+                    
+                    // Display paths found
+                    let pathHtml = `
+                        <div style="background:#d4edda; color:#155724; padding:10px; border-radius:4px; border:1px solid #c3e6cb; margin-bottom:10px;">
+                            <strong>✓ ${result.message}</strong>
+                        </div>
+                    `;
+                    
+                    if (result.paths && result.paths.length > 0) {
+                        // Show path selector if multiple paths
+                        if (result.paths.length > 1) {
+                            pathHtml += '<div style="margin-bottom:10px; padding:8px; background:#E3F2FD; border-radius:4px; border:1px solid #2196F3;">';
+                            pathHtml += `<div style="font-weight:bold; margin-bottom:5px;">📊 ${result.path_count} Equal-Length Paths Found</div>`;
+                            pathHtml += '<label style="display:block; font-size:0.9em; margin-bottom:3px;">Select path to view:</label>';
+                            pathHtml += '<select id="path-selector" style="width:100%; padding:6px; border-radius:4px; border:1px solid #ccc; font-size:0.85em;">';
+                            result.paths.forEach((path, idx) => {
+                                const bookNames = path.map(s => s.book_title).join(' → ');
+                                pathHtml += `<option value="${idx}">Path ${idx + 1}: ${bookNames.length > 60 ? bookNames.substring(0, 60) + '...' : bookNames}</option>`;
+                            });
+                            pathHtml += '</select>';
+                            pathHtml += '</div>';
+                        }
+                        
+                        // Display first path initially
+                        pathHtml += '<div id="path-display-container">';
+                        pathHtml += renderPathDisplay(result.paths[0], 0, result.paths.length);
+                        pathHtml += '</div>';
+                        
+                        // Add clear highlighting button
+                        pathHtml += '<button id="clear-path-highlight" class="btn btn-small" style="width:100%; margin-top:10px; background:#757575; color:white; font-size:0.85em;">Clear Path Highlighting</button>';
+                    }
+                    
+                    pathResult.innerHTML = pathHtml;
+                    pathResult.style.display = 'block';
+                    
+                    // Add clear highlighting button handler
+                    const clearBtn = document.getElementById('clear-path-highlight');
+                    if (clearBtn) {
+                        clearBtn.addEventListener('click', () => {
+                            // Reset all highlighting
+                            graph.forEachNode((node) => {
+                                const attr = graph.getNodeAttributes(node);
+                                if (attr.originalColor) {
+                                    graph.setNodeAttribute(node, 'color', attr.originalColor);
+                                    graph.setNodeAttribute(node, 'size', attr.originalSize);
+                                }
+                            });
+                            
+                            graph.forEachEdge((edge) => {
+                                const attr = graph.getEdgeAttributes(edge);
+                                if (attr.originalColor) {
+                                    graph.setEdgeAttribute(edge, 'color', attr.originalColor);
+                                    graph.setEdgeAttribute(edge, 'size', attr.originalSize);
+                                }
+                            });
+                            
+                            renderer.refresh();
+                            
+                            clearBtn.textContent = '✓ Highlighting Cleared';
+                            clearBtn.style.background = '#4CAF50';
+                            setTimeout(() => {
+                                clearBtn.textContent = 'Clear Path Highlighting';
+                                clearBtn.style.background = '#757575';
+                            }, 1500);
+                        });
+                    }
+                    
+                    // Add path selector change handler if multiple paths
+                    if (result.paths.length > 1) {
+                        const pathSelector = document.getElementById('path-selector');
+                        pathSelector.addEventListener('change', () => {
+                            const selectedIdx = parseInt(pathSelector.value);
+                            const container = document.getElementById('path-display-container');
+                            container.innerHTML = renderPathDisplay(result.paths[selectedIdx], selectedIdx, result.paths.length);
+                            
+                            // Highlight selected path more prominently using detailed_paths
+                            if (result.detailed_paths && result.detailed_paths.length > 0) {
+                                highlightPaths(result.detailed_paths, selectedIdx);
+                            }
+                        });
+                    }
+                    
+                    // Show consistency check button
+                    consistencyCheckSection.style.display = 'block';
+                } else {
+                    // No path found
+                    pathResult.innerHTML = `
+                        <div style="background:#fff3cd; color:#856404; padding:10px; border-radius:4px; border:1px solid #ffc107;">
+                            <strong>No Path Found</strong><br>
+                            <span style="font-size:0.9em;">${result.message}</span>
+                        </div>
+                    `;
+                    pathResult.style.display = 'block';
+                }
+                
+            } catch (error) {
+                pathResult.innerHTML = `
+                    <div style="background:#f8d7da; color:#721c24; padding:10px; border-radius:4px; border:1px solid #f5c6cb;">
+                        <strong>Error:</strong> ${error.message}
+                    </div>
+                `;
+                pathResult.style.display = 'block';
+            } finally {
+                findPathBtn.disabled = false;
+                findPathBtn.textContent = 'Find Question Path';
+                updateFindPathButton();
+            }
+        });
+        
+        // Narrative analysis button handler
+        const narrativeAnalysisBtn = document.getElementById('narrative-analysis-btn');
+        const narrativeResult = document.getElementById('narrative-result');
+        let isDoingNarrative = false;
+        
+        narrativeAnalysisBtn.addEventListener('click', async () => {
+            if (!currentPathData || !currentPathData.detailed_paths) {
+                console.error('No path data available for narrative analysis');
+                return;
+            }
+            
+            if (isDoingNarrative) {
+                console.log('Already doing narrative analysis, skipping...');
+                return;
+            }
+            
+            isDoingNarrative = true;
+            const originalText = narrativeAnalysisBtn.textContent;
+            narrativeAnalysisBtn.disabled = true;
+            narrativeAnalysisBtn.textContent = 'Generating Narrative...';
+            
+            // Get the selected path index (if selector exists, otherwise default to 0)
+            const pathSelector = document.getElementById('path-selector');
+            const selectedPathIndex = pathSelector ? parseInt(pathSelector.value) : 0;
+            
+            try {
+                const response = await fetch('/api/narrative-analysis', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        detailed_paths: currentPathData.detailed_paths,
+                        path_index: selectedPathIndex,
+                        start_question: startQuestionSelect.value,
+                        end_question: endQuestionSelect.value,
+                        consistency_data: currentPathData.consistency_data || null
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Narrative analysis response:', result);
+                
+                if (result.error) {
+                    narrativeResult.innerHTML = `
+                        <div style="background:#f8d7da; color:#721c24; padding:10px; border-radius:4px; border:1px solid #f5c6cb; margin-top:10px;">
+                            <strong>Error:</strong> ${result.error}
+                        </div>
+                    `;
+                } else if (result.narrative) {
+                    // Show narrative content in modal
+                    const selectedPath = currentPathData.detailed_paths[selectedPathIndex];
+                    let modalContent = '';
+                    
+                    // Path Summary Section
+                    modalContent += '<div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:20px;">';
+                    modalContent += '<h3 style="margin:0 0 15px 0; color:#2c3e50;">📚 Path Overview</h3>';
+                    modalContent += '<div style="font-size:14px; color:#555; margin-bottom:10px;"><strong>Start Question:</strong> ' + startQuestionSelect.value + '</div>';
+                    modalContent += '<div style="font-size:14px; color:#555; margin-bottom:10px;"><strong>End Question:</strong> ' + endQuestionSelect.value + '</div>';
+                    modalContent += '<div style="font-size:14px; color:#555; margin-bottom:10px;"><strong>Path Length:</strong> ' + selectedPath.books.length + ' books</div>';
+                    
+                    if (currentPathData.path_count > 1) {
+                        modalContent += '<div style="font-size:14px; color:#555; margin-bottom:10px;"><strong>Currently Viewing:</strong> Path ' + (selectedPathIndex + 1) + ' of ' + currentPathData.path_count + '</div>';
+                    }
+                    modalContent += '</div>';
+                    
+                    // Main Narrative Section
+                    modalContent += '<div style="background:#fff; padding:20px; border:1px solid #ddd; border-radius:8px;">';
+                    modalContent += '<h3 style="margin:0 0 20px 0; color:#7B1FA2;">📝 Scholarly Discourse Narrative</h3>';
+                    modalContent += '<div style="font-size:16px; line-height:1.7; color:#333; text-align:justify;">';
+                    modalContent += result.narrative.replace(/\n\n/g, '</p><p style="margin:15px 0;">').replace(/\n/g, '<br>');
+                    modalContent += '</div>';
+                    modalContent += '</div>';
+                    
+                    // Show modal
+                    document.getElementById('narrative-modal-content').innerHTML = modalContent;
+                    document.getElementById('narrative-modal').style.display = 'block';
+                    
+                    // Show summary in panel
+                    narrativeResult.innerHTML = `
+                        <div style="background:#9C27B0; color:white; padding:12px; border-radius:4px; margin-top:10px; text-align:center; cursor:pointer;" onclick="document.getElementById('narrative-modal').style.display='block'">
+                            <div style="font-size:24px; margin-bottom:5px;">📝</div>
+                            <div style="font-weight:bold; margin-bottom:3px;">Narrative Analysis Complete</div>
+                            <div style="font-size:13px;">
+                                Scholarly discourse through ${selectedPath.books.length} books analyzed
+                            </div>
+                            <div style="font-size:12px; margin-top:5px; opacity:0.9;">Click to view narrative</div>
+                        </div>
+                    `;
+                    narrativeResult.style.display = 'block';
+                }
+                
+            } catch (error) {
+                console.error('Narrative analysis error:', error);
+                narrativeResult.innerHTML = `
+                    <div style="background:#f8d7da; color:#721c24; padding:10px; border-radius:4px; border:1px solid #f5c6cb; margin-top:10px;">
+                        <strong>Error:</strong> ${error.message}
+                    </div>
+                `;
+                narrativeResult.style.display = 'block';
+            } finally {
+                isDoingNarrative = false;
+                narrativeAnalysisBtn.disabled = false;
+                narrativeAnalysisBtn.textContent = originalText;
+            }
+        });
+        
+        // Consistency check button handler
+        let isCheckingConsistency = false; // Prevent concurrent API calls
+        
+        consistencyCheckBtn.addEventListener('click', async () => {
+            if (!currentPathData || !currentPathData.detailed_paths) {
+                console.error('No path data available');
+                return;
+            }
+            
+            // Prevent multiple concurrent requests
+            if (isCheckingConsistency) {
+                console.log('Already checking consistency, skipping...');
+                return;
+            }
+            
+            // Get the selected path index (if selector exists, otherwise default to 0)
+            const pathSelector = document.getElementById('path-selector');
+            const selectedPathIndex = pathSelector ? parseInt(pathSelector.value) || 0 : 0;
+            
+            console.log('Starting consistency check for path index:', selectedPathIndex);
+            
+            isCheckingConsistency = true;
+            consistencyCheckBtn.disabled = true;
+            const originalText = consistencyCheckBtn.textContent;
+            consistencyCheckBtn.textContent = '🔬 Checking...';
+            consistencyResult.innerHTML = '<div style="padding:10px; color:#666;">Analyzing answer consistency with AI...</div>';
+            
+            try {
+                console.log('Sending consistency check request with detailed_paths:', currentPathData.detailed_paths);
+                
+                const response = await fetch('/api/check-consistency', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        detailed_paths: currentPathData.detailed_paths,
+                        path_index: selectedPathIndex,
+                        start_question: startQuestionSelect.value,
+                        end_question: endQuestionSelect.value
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Consistency check response:', result);
+                
+                if (result.error) {
+                    consistencyResult.innerHTML = `
+                        <div style="background:#f8d7da; color:#721c24; padding:10px; border-radius:4px; border:1px solid #f5c6cb; margin-top:10px;">
+                            <strong>Error:</strong> ${result.error}
+                        </div>
+                    `;
+                } else if (result.intersection_question_results) {
+                    // Use the new detailed results
+                    const questionResults = result.intersection_question_results;
+                    const avgContradiction = result.average_contradiction;
+                    const cachedCount = result.cached_count;
+                    const newCount = result.new_count;
+                    
+                    let overallColor = '#4CAF50';
+                    let overallLabel = 'Good - Answers are consistent';
+                    let overallIcon = '✓';
+                    
+                    if (avgContradiction > 60) {
+                        overallColor = '#f44336';
+                        overallLabel = 'Poor - High contradictions found';
+                        overallIcon = '✗';
+                    } else if (avgContradiction > 30) {
+                        overallColor = '#FFC107';
+                        overallLabel = 'Fair - Some contradictions detected';
+                        overallIcon = '⚠';
+                    }
+                    
+                    // Build modal content
+                    let modalContent = '';
+                    
+                    // Overall Conclusion Section
+                    modalContent += `
+                        <div style="background:${overallColor}; color:white; padding:15px; border-radius:8px; margin-bottom:20px; text-align:center;">
+                            <div style="font-size:48px; margin-bottom:10px;">${overallIcon}</div>
+                            <div style="font-size:24px; font-weight:bold; margin-bottom:5px;">Overall Consistency: ${overallLabel}</div>
+                            <div style="font-size:18px;">Average Contradiction: ${avgContradiction.toFixed(1)}%</div>
+                            <div style="font-size:14px; margin-top:10px; opacity:0.9;">
+                                📊 ${result.total_questions} intersection question${result.total_questions > 1 ? 's' : ''} analyzed
+                                ${cachedCount > 0 ? ` (${cachedCount} from cache, ${newCount} new)` : ''}
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Path Summary Section
+                    const selectedPath = currentPathData.detailed_paths[selectedPathIndex];
+                    modalContent += '<div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:20px;">';
+                    modalContent += '<h3 style="margin:0 0 15px 0; color:#2c3e50;">📚 Path Summary</h3>';
+                    modalContent += '<div style="font-size:14px; color:#555; margin-bottom:10px;"><strong>Start Question:</strong> ' + startQuestionSelect.value + '</div>';
+                    modalContent += '<div style="font-size:14px; color:#555; margin-bottom:10px;"><strong>End Question:</strong> ' + endQuestionSelect.value + '</div>';
+                    modalContent += '<div style="font-size:14px; color:#555; margin-bottom:10px;"><strong>Books in Path:</strong> ' + selectedPath.books.length + '</div>';
+                    
+                    // Show info about multiple paths if available
+                    if (currentPathData.path_count > 1) {
+                        modalContent += '<div style="font-size:14px; color:#555; margin-bottom:10px;"><strong>Total Paths Found:</strong> ' + currentPathData.path_count + ' equal-length paths</div>';
+                        modalContent += '<div style="font-size:14px; color:#555; margin-bottom:10px;"><strong>Currently Viewing:</strong> Path ' + (selectedPathIndex + 1) + ' of ' + currentPathData.path_count + '</div>';
+                        modalContent += '<div style="font-size:12px; color:#888; font-style:italic; padding:8px; background:#fff; border-radius:4px; border-left:3px solid #2196F3;">Note: This analysis is for the currently selected path.</div>';
+                    }
+                    
+                    // List all books in the path
+                    modalContent += '<div style="margin-top:15px;">';
+                    selectedPath.books.forEach((book, index) => {
+                        modalContent += `
+                            <div style="display:flex; align-items:center; margin-bottom:8px;">
+                                <div style="background:#8B0000; color:white; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-weight:bold; margin-right:10px; flex-shrink:0;">${index + 1}</div>
+                                <div style="flex:1;">
+                                    <div style="font-weight:bold; color:#2c3e50;">${book.book_title}</div>
+                                    <div style="font-size:12px; color:#666; margin-top:3px;">📝 ${book.questions.length} question${book.questions.length > 1 ? 's' : ''} highlighted</div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        if (index < selectedPath.books.length - 1) {
+                            modalContent += '<div style="margin-left:12px; border-left:2px dashed #ccc; height:20px;"></div>';
+                        }
+                    });
+                    modalContent += '</div>';
+                    modalContent += '</div>';
+                    
+                    // Detailed Intersection Question Analysis Section
+                    modalContent += '<div style="background:#fff; padding:15px; border:1px solid #ddd; border-radius:8px;">';
+                    modalContent += '<h3 style="margin:0 0 15px 0; color:#2c3e50;">🔍 Intersection Question Analysis</h3>';
+                    modalContent += '<p style="color:#666; font-size:13px; margin-bottom:15px;">Analyzing consistency of answers to shared questions between consecutive books in the path.</p>';
+                    
+                    questionResults.forEach((item, idx) => {
+                        const percentage = item.contradiction_percentage;
+                        let color = '#4CAF50';
+                        let label = 'Parallel/Consistent';
+                        let icon = '✓';
+                        
+                        if (percentage > 60) {
+                            color = '#f44336';
+                            label = 'High Contradiction';
+                            icon = '✗';
+                        } else if (percentage > 30) {
+                            color = '#FFC107';
+                            label = 'Partial Contradiction';
+                            icon = '⚠';
+                        }
+                        
+                        modalContent += `
+                            <div style="margin-bottom:20px; padding:15px; background:#f8f9fa; border-left:4px solid ${color}; border-radius:3px;">
+                                <div style="display:flex; align-items:start; gap:10px; margin-bottom:10px;">
+                                    <div style="font-size:24px; line-height:1;">${icon}</div>
+                                    <div style="flex:1;">
+                                        <div style="font-weight:bold; color:#2c3e50; margin-bottom:8px; font-size:15px;">
+                                            ${idx + 1}. ${item.question}
+                                            ${item.from_cache ? '<span style="font-size:11px; background:#9C27B0; color:white; padding:2px 6px; border-radius:3px; margin-left:8px;">CACHED</span>' : '<span style="font-size:11px; background:#4CAF50; color:white; padding:2px 6px; border-radius:3px; margin-left:8px;">NEW</span>'}
+                                        </div>
+                                        
+                                        <div style="font-size:13px; color:#555; margin-bottom:8px;">
+                                            <strong>📚 Between:</strong> "${item.book1_title}" ↔ "${item.book2_title}"
+                                        </div>
+                                        
+                                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                                            <div style="flex:1; background:#e0e0e0; height:24px; border-radius:12px; overflow:hidden;">
+                                                <div style="background:${color}; height:100%; width:${percentage}%; transition:width 0.5s; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:bold;">
+                                                    ${percentage > 10 ? percentage + '%' : ''}
+                                                </div>
+                                            </div>
+                                            <div style="font-weight:bold; color:${color}; min-width:70px; font-size:18px;">${percentage}%</div>
+                                        </div>
+                                        <div style="font-size:13px; color:#666; font-style:italic; margin-bottom:10px;">${label}</div>
+                                        
+                                        <!-- Answers section (collapsible) -->
+                                        <details style="margin-top:10px;">
+                                            <summary style="cursor:pointer; color:#2196F3; font-weight:bold; font-size:13px; user-select:none;">View Answers</summary>
+                                            <div style="margin-top:10px; padding:10px; background:white; border-radius:4px;">
+                                                <div style="margin-bottom:10px;">
+                                                    <div style="font-weight:bold; color:#8B0000; margin-bottom:5px;">📖 ${item.book1_title}:</div>
+                                                    <div style="padding:8px; background:#fff3cd; border-left:3px solid #ffc107; font-size:13px; color:#333;">
+                                                        ${item.book1_answer}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div style="font-weight:bold; color:#8B0000; margin-bottom:5px;">📖 ${item.book2_title}:</div>
+                                                    <div style="padding:8px; background:#d1ecf1; border-left:3px solid #17a2b8; font-size:13px; color:#333;">
+                                                        ${item.book2_answer}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </details>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    modalContent += '</div>';
+                    
+                    // Show modal
+                    document.getElementById('consistency-modal-content').innerHTML = modalContent;
+                    document.getElementById('consistency-modal').style.display = 'block';
+                    
+                    // Also show a summary in the panel
+                    consistencyResult.innerHTML = `
+                        <div style="background:${overallColor}; color:white; padding:12px; border-radius:4px; margin-top:10px; text-align:center; cursor:pointer;" onclick="document.getElementById('consistency-modal').style.display='block'">
+                            <div style="font-size:24px; margin-bottom:5px;">${overallIcon}</div>
+                            <div style="font-weight:bold; margin-bottom:3px;">${overallLabel}</div>
+                            <div style="font-size:13px;">
+                                ${result.total_questions} question${result.total_questions > 1 ? 's' : ''} analyzed
+                                ${cachedCount > 0 ? `<br>(${cachedCount} cached)` : ''}
+                            </div>
+                            <div style="font-size:12px; margin-top:5px; opacity:0.9;">Click to view detailed report</div>
+                        </div>
+                    `;
+                    
+                    // Show narrative analysis section after consistency check is complete
+                    document.getElementById('narrative-analysis-section').style.display = 'block';
+                }
+                
+            } catch (error) {
+                console.error('Consistency check error:', error);
+                consistencyResult.innerHTML = `
+                    <div style="background:#f8d7da; color:#721c24; padding:10px; border-radius:4px; border:1px solid #f5c6cb; margin-top:10px;">
+                        <strong>Error:</strong> ${error.message}
+                    </div>
+                `;
+            } finally {
+                isCheckingConsistency = false; // Reset flag
+                consistencyCheckBtn.disabled = false;
+                consistencyCheckBtn.textContent = originalText;
+            }
+        });
+        
+        return renderer;
+        
+    } catch (err) {
+        console.error('Error initializing graph:', err);
+        const container = document.getElementById('sigma-container');
+        container.innerHTML = '<div style="padding:20px; color:red; font-family:monospace;">Error loading graph:<br><br>' + err.message + '<br><br>' + err.stack + '</div>';
+    }
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', initGraph);
+</script>
+{% endblock %}

@@ -1,0 +1,978 @@
+{% extends 'base.html' %}
+
+{% block title %}View Network - {{ document.title or document.filename }}{% endblock %}
+
+{% block content %}
+<style>
+    /* Full page network visualization */
+    body {
+        overflow: hidden;
+    }
+    
+    #network-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 1;
+    }
+    
+    #sigma-container {
+        width: 100%;
+        height: 100%;
+        background: #f9f9f9;
+    }
+    
+    /* Overlay UI elements */
+    .overlay-panel {
+        position: fixed;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        padding: 15px;
+        z-index: 10;
+        backdrop-filter: blur(10px);
+    }
+    
+    #header-panel {
+        top: 20px;
+        left: 20px;
+        max-width: 500px;
+    }
+    
+    #controls-panel {
+        top: 20px;
+        right: 20px;
+        max-width: 400px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+    }
+    
+    #info-panel {
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 600px;
+        max-width: 80vw;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .panel-header {
+        font-weight: bold;
+        font-size: 1.1em;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #4CAF50;
+        color: #333;
+    }
+    
+    .close-panel {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: none;
+        border: none;
+        font-size: 1.2em;
+        cursor: pointer;
+        color: #666;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        line-height: 24px;
+        text-align: center;
+    }
+    
+    .close-panel:hover {
+        color: #000;
+    }
+    
+    .collapsed {
+        display: none;
+    }
+    
+    .toggle-btn {
+        position: fixed;
+        z-index: 11;
+        background: rgba(76, 175, 80, 0.9);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 8px 12px;
+        cursor: pointer;
+        font-size: 0.9em;
+    }
+    
+    .toggle-btn:hover {
+        background: rgba(76, 175, 80, 1);
+    }
+    
+    #toggle-header {
+        top: 20px;
+        left: 20px;
+    }
+    
+    #toggle-controls {
+        top: 20px;
+        right: 20px;
+    }
+    
+    #toggle-info {
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    
+    #screenshot-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 11;
+        background: rgba(76, 175, 80, 0.9);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 0.9em;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    #screenshot-btn:hover {
+        background: rgba(76, 175, 80, 1);
+    }
+</style>
+
+<!-- Full page network container -->
+<div id="network-container">
+    <div id="sigma-container"></div>
+</div>
+
+<!-- Header Panel -->
+<button id="toggle-header" class="toggle-btn collapsed">📄 Info</button>
+<div id="header-panel" class="overlay-panel">
+    <button class="close-panel" onclick="togglePanel('header')">✕</button>
+    <div class="panel-header">{{ document.title or document.filename }}</div>
+    {% if document.author or document.year or document.publisher or document.journal %}
+    <div style="font-size:0.9em; color:#666;">
+        {% if document.author %}<strong>Author:</strong> {{ document.author }}<br>{% endif %}
+        {% if document.journal %}
+            <strong>Journal:</strong> {{ document.journal }}
+            {% if document.volume %}, Vol. {{ document.volume }}{% endif %}
+            {% if document.number %}({{ document.number }}){% endif %}
+            {% if document.pages %}, pp. {{ document.pages }}{% endif %}
+            <br>
+        {% elif document.publisher %}
+            <strong>Publisher:</strong> {{ document.publisher }}<br>
+        {% endif %}
+        {% if document.year %}<strong>Year:</strong> {{ document.year }}<br>{% endif %}
+        {% if document.publication_type %}<strong>Type:</strong> {{ document.publication_type }}<br>{% endif %}
+    </div>
+    {% endif %}
+    <div style="margin-top:10px;">
+        <a href="{{ url_for('document.networks_page') }}" class="btn btn-small" style="display:inline-block;">← Back to My Networks</a>
+    </div>
+</div>
+
+<!-- Controls Panel -->
+<button id="toggle-controls" class="toggle-btn collapsed">⚙️ Controls</button>
+<div id="controls-panel" class="overlay-panel">
+    <button class="close-panel" onclick="togglePanel('controls')">✕</button>
+    <div class="panel-header">Visualization Controls</div>
+    
+    <div style="margin-bottom:12px;">
+        <input id="node-search" type="search" placeholder="Search nodes..." style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+        <button id="clear-search" class="btn btn-small" style="margin-top:5px; width:100%;">Clear Search</button>
+    </div>
+    
+    <div style="margin-bottom:12px;">
+        <label style="font-weight:bold; display:block; margin-bottom:5px;">Hierarchy Levels:</label>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <input type="range" id="level-slider" min="1" max="4" value="4" style="flex:1;">
+            <span id="level-value" style="font-weight:bold; min-width:20px;">4</span>
+        </div>
+    </div>
+    
+    <div style="margin-bottom:12px;">
+        <button id="fa2-toggle" class="btn btn-small" style="width:100%;">Start ForceAtlas</button>
+        <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+            <label style="margin:0; white-space:nowrap;">Speed:</label>
+            <input type="range" id="fa2-speed" min="1" max="10" step="1" value="1" style="flex:1;">
+            <span id="fa2-speed-value" style="min-width:30px;">1x</span>
+        </div>
+    </div>
+    
+    <div style="margin-bottom:12px;">
+        <button id="copy-json" class="btn btn-small" style="width:100%;">Copy JSON Data</button>
+    </div>
+    
+    <!-- Camera Controls Section -->
+    <div style="border-top:2px solid #4CAF50; padding-top:12px; margin-top:12px;">
+        <div style="font-weight:bold; margin-bottom:10px;">Camera Controls</div>
+        <button type="button" id="reset-camera" class="btn btn-small" style="width:100%;">Reset Camera</button>
+    </div>
+</div>
+
+<!-- Node Info Panel -->
+<button id="toggle-info" class="toggle-btn collapsed">ℹ️ Node Details</button>
+<div id="info-panel" class="overlay-panel">
+    <button class="close-panel" onclick="togglePanel('info')">✕</button>
+    <div class="panel-header">Node Details</div>
+    <div id="node-details-placeholder">Click a node to view details.</div>
+</div>
+
+<!-- Screenshot Button -->
+<button id="screenshot-btn">📸 Screenshot</button>
+
+<script>
+// Toggle panel visibility
+function togglePanel(panelName) {
+    const panel = document.getElementById(panelName + '-panel');
+    const toggle = document.getElementById('toggle-' + panelName);
+    
+    if (panel.classList.contains('collapsed')) {
+        panel.classList.remove('collapsed');
+        toggle.classList.add('collapsed');
+    } else {
+        panel.classList.add('collapsed');
+        toggle.classList.remove('collapsed');
+    }
+}
+
+// Add click handlers for toggle buttons
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('toggle-header').addEventListener('click', function() {
+        togglePanel('header');
+    });
+    
+    document.getElementById('toggle-controls').addEventListener('click', function() {
+        togglePanel('controls');
+    });
+    
+    document.getElementById('toggle-info').addEventListener('click', function() {
+        togglePanel('info');
+    });
+});
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='vendor/graphology.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/sigma.umd.min.js') }}"></script>
+<script>
+// Using Sigma.js for network visualization with proper camera controls
+async function initGraph() {
+    try {
+        // Get container
+        const container = document.getElementById('sigma-container');
+        
+    // Fetch network data from the backend
+    // Use the server API endpoint which returns JSON for the document
+    const response = await fetch('/api/network_data/{{ document.id }}');
+        const rawData = await response.json();
+        
+        // Create graph
+        const graph = new graphology.Graph();
+        
+        // Store original data for level filtering
+        let allNodeData = [];
+        let allEdgeData = [];
+        
+        // Helper to convert data to graph structure
+        function processNodes(data, maxLevel) {
+            // This function supports two data formats:
+            // 1) API format: { nodes: [...], edges: [...] }
+            // 2) Legacy nested format: { data: [...] } (keyword->question->answer->proof)
+            let nodes = [];
+            let edges = [];
+
+            if (data && Array.isArray(data.nodes)) {
+                // API format: use nodes/edges directly
+                nodes = data.nodes.map(n => {
+                    // Derive numeric level from the semantic type when not provided
+                    let level = typeof n.level !== 'undefined' ? n.level : null;
+                    const t = n.type || '';
+                    if (level === null) {
+                        if (t === 'keyword') level = 1;
+                        else if (t === 'question') level = 2;
+                        else if (t === 'answer') level = 3;
+                        else if (t === 'proof') level = 4;
+                        else level = 2;
+                    }
+
+                    return ({
+                        id: n.id,
+                        label: n.label || n.name || '',
+                        color: n.color || '#999',
+                        size: n.size || 8,
+                        level: level,
+                        dataType: t || 'node',
+                        // Ensure x/y exist for Sigma (random init if missing)
+                        x: typeof n.x === 'number' ? n.x : Math.random(),
+                        y: typeof n.y === 'number' ? n.y : Math.random(),
+                        // Preserve extra attributes
+                        full_question: n.full_question,
+                        answer: n.answer,
+                        answer_text: n.answer_text,
+                        proof: n.proof,
+                        proof_text: n.proof_text
+                    });
+                });
+
+                edges = Array.isArray(data.edges) ? data.edges.map(e => ({ id: e.id || (`e_${e.source}_${e.target}`), source: e.source, target: e.target, color: e.color || '#999' })) : [];
+
+            } else if (Array.isArray(data.data)) {
+                // Legacy nested format (build nodes/edges from nested JSON)
+                data.data.forEach(n => {
+                    const kId = `k_${n.id}`;
+                        nodes.push({ id: kId, label: n.keyword, color: '#2196F3', size: 15, level: 1, dataType: 'keyword', x: Math.random(), y: Math.random() });
+
+                    const qId = `q_${n.id}`;
+                        nodes.push({ id: qId, label: n.question, color: '#4CAF50', size: 12, level: 2, dataType: 'question', full_question: n.question, x: Math.random(), y: Math.random() });
+                    edges.push({ id: `e_${kId}_${qId}`, source: kId, target: qId, color: '#999' });
+
+                    if (n.answer && n.answer.trim()) {
+                        const aId = `a_${n.id}`;
+                            nodes.push({ id: aId, label: n.answer.substring(0, 50), color: '#FF9800', size: 10, level: 3, dataType: 'answer', answer: n.answer, x: Math.random(), y: Math.random() });
+                        edges.push({ id: `e_${qId}_${aId}`, source: qId, target: aId, color: '#999' });
+
+                        if (n.proof && n.proof.trim()) {
+                            const pId = `p_${n.id}`;
+                                nodes.push({ id: pId, label: n.proof.substring(0, 40), color: '#F44336', size: 8, level: 4, dataType: 'proof', proof: n.proof, x: Math.random(), y: Math.random() });
+                            edges.push({ id: `e_${aId}_${pId}`, source: aId, target: pId, color: '#999' });
+                        }
+                    }
+                });
+            }
+
+            // Store all data
+            allNodeData = nodes;
+            allEdgeData = edges;
+
+            // Filter by max level
+            const filteredNodes = nodes.filter(n => n.level <= maxLevel);
+            const nodeIds = new Set(filteredNodes.map(n => n.id));
+            const filteredEdges = edges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
+
+            return { nodes: filteredNodes, edges: filteredEdges };
+        }
+        
+        // Initial data processing (level 4)
+        const initialData = processNodes(rawData, 4);
+        
+        // Add nodes to graph (include x/y positions required by Sigma)
+        initialData.nodes.forEach(node => {
+            graph.addNode(node.id, {
+                label: node.label,
+                color: node.color,
+                size: node.size,
+                level: node.level,
+                type: 'circle',
+                x: (typeof node.x === 'number') ? node.x : Math.random(),
+                y: (typeof node.y === 'number') ? node.y : Math.random(),
+                dataType: node.dataType || node.type || null,
+                full_question: node.full_question || null,
+                answer_text: node.answer || node.answer_text || null,
+                proof_text: node.proof || node.proof_text || null,
+                page_number: node.page_number || null,
+                orig_size: node.size || 8
+            });
+        });
+        
+        // Add edges to graph
+        initialData.edges.forEach(edge => {
+            graph.addEdge(edge.source, edge.target);
+        });
+        
+        // Create Sigma instance with layout
+        const renderer = new Sigma(graph, container, {
+            renderLabels: true,
+            renderEdgeLabels: false
+        });
+
+    // --- Cluster labeling for keyword groups ---
+    let clustersLayer = null;
+    let clusterLabels = {};
+    // Hide cluster labels when zoomed in beyond this ratio (smaller ratio = more zoom-in)
+    const CLUSTER_LABEL_HIDE_RATIO = 0.6; // tweak as needed
+
+        function buildClusters() {
+            // Build clusters keyed by keyword node id (dataType === 'keyword' or id starts with 'k_')
+            const clusters = {};
+            graph.forEachNode((node, attr) => {
+                const isKeyword = (attr.dataType === 'keyword') || (String(node).startsWith('k_'));
+                if (isKeyword) {
+                    clusters[node] = { label: attr.label || node, color: attr.color || '#333', positions: [] };
+                }
+            });
+
+            // For each cluster, collect positions of nodes belonging to this keyword group.
+            // We'll include the keyword node, its immediate neighbors, and neighbors-of-neighbors to capture question/answer/proof.
+            Object.keys(clusters).forEach(kid => {
+                const seen = new Set();
+                function collect(n, depth) {
+                    if (seen.has(n) || depth < 0) return;
+                    seen.add(n);
+                    const a = graph.getNodeAttributes(n);
+                    if (a && typeof a.x === 'number' && typeof a.y === 'number') clusters[kid].positions.push({ x: a.x, y: a.y });
+                    graph.forEachNeighbor(n, neigh => collect(neigh, depth - 1));
+                }
+                collect(kid, 2); // depth 2 should include question->answer->proof
+            });
+
+            return clusters;
+        }
+
+        function renderClusterLabels() {
+            // remove old layer
+            if (clustersLayer) {
+                clustersLayer.remove();
+                clustersLayer = null;
+                clusterLabels = {};
+            }
+
+            clustersLayer = document.createElement('div');
+            clustersLayer.id = 'clustersLayer';
+            clustersLayer.style.position = 'absolute';
+            clustersLayer.style.top = '0';
+            clustersLayer.style.left = '0';
+            clustersLayer.style.width = '100%';
+            clustersLayer.style.height = '100%';
+            clustersLayer.style.pointerEvents = 'none';
+
+            const clusters = buildClusters();
+            let html = '';
+            Object.keys(clusters).forEach(key => {
+                const c = clusters[key];
+                // default to center (0,0) until positioned in afterRender
+                const id = `cluster-label-${key}`;
+                html += `<div id="${id}" class="clusterLabel" style="position:absolute; transform:translate(-50%,-50%); pointer-events:auto; padding:4px 8px; border-radius:6px; font-weight:600; background:rgba(255,255,255,0.85); color:${c.color}; border:1px solid ${c.color};">${escapeHtml(c.label)}</div>`;
+                clusterLabels[key] = { id, data: c };
+            });
+
+            clustersLayer.innerHTML = html;
+
+            // try to insert under sigma hovers layer if present
+            const hovers = container.querySelector('.sigma-hovers');
+            if (hovers && hovers.parentNode) container.insertBefore(clustersLayer, hovers);
+            else container.appendChild(clustersLayer);
+
+            // initial position update
+            updateClusterPositions();
+        }
+
+        function updateClusterPositions() {
+            // Hide cluster labels when zoomed-in beyond threshold
+            let camRatio = 1;
+            try {
+                camRatio = renderer.getCamera().getState().ratio;
+            } catch (e) {
+                camRatio = 1;
+            }
+            Object.keys(clusterLabels).forEach(k => {
+                const info = clusterLabels[k];
+                const dom = document.getElementById(info.id);
+                if (!dom) return;
+                // Hide all cluster labels if zoomed-in too much
+                if (camRatio < CLUSTER_LABEL_HIDE_RATIO) {
+                    dom.style.display = 'none';
+                    return;
+                }
+                const positions = info.data.positions || [];
+                if (positions.length === 0) {
+                    dom.style.display = 'none';
+                    return;
+                }
+                // compute barycenter
+                const sum = positions.reduce((acc, p) => { acc.x += p.x; acc.y += p.y; return acc; }, { x: 0, y: 0 });
+                const cx = sum.x / positions.length;
+                const cy = sum.y / positions.length;
+                // convert to viewport
+                try {
+                    const vp = renderer.graphToViewport({ x: cx, y: cy });
+                    dom.style.left = `${vp.x}px`;
+                    dom.style.top = `${vp.y}px`;
+                    dom.style.display = '';
+                } catch (e) {
+                    // fallback: hide
+                    dom.style.display = 'none';
+                }
+            });
+        }
+
+        // build/render clusters now
+        renderClusterLabels();
+
+        // update cluster positions on every render (works with camera/zoom and FA2)
+        renderer.on('afterRender', () => {
+            try {
+                // refresh cluster positions from current node attributes
+                Object.keys(clusterLabels).forEach(k => {
+                    const info = clusterLabels[k];
+                    // recompute positions array from current node coords
+                    const positions = [];
+                    const seen = new Set();
+                    function collect(n, depth) {
+                        if (seen.has(n) || depth < 0) return; seen.add(n);
+                        const a = graph.getNodeAttributes(n);
+                        if (a && typeof a.x === 'number' && typeof a.y === 'number') positions.push({ x: a.x, y: a.y });
+                        graph.forEachNeighbor(n, neigh => collect(neigh, depth - 1));
+                    }
+                    collect(k, 2);
+                    info.data.positions = positions;
+                });
+                updateClusterPositions();
+            } catch (e) {
+                // ignore
+            }
+        });
+        
+        // Reset camera button
+        const resetButton = document.getElementById('reset-camera');
+        resetButton.addEventListener('click', () => {
+            renderer.getCamera().animatedReset({ duration: 600 });
+        });
+        
+        // Handle level slider
+        const levelSlider = document.getElementById('level-slider');
+        const levelValue = document.getElementById('level-value');
+        
+        levelSlider.addEventListener('change', (e) => {
+            // stop ForceAtlas when rebuilding graph
+            try { stopFA2(); } catch (err) { /* ignore if not started */ }
+            const level = parseInt(e.target.value);
+            levelValue.textContent = level;
+            
+            // Clear and rebuild graph
+            graph.clear();
+            const filteredData = processNodes(rawData, level);
+            
+            filteredData.nodes.forEach(node => {
+                graph.addNode(node.id, {
+                    label: node.label,
+                    color: node.color,
+                    size: node.size,
+                    level: node.level,
+                    type: 'circle',
+                    x: (typeof node.x === 'number') ? node.x : Math.random(),
+                    y: (typeof node.y === 'number') ? node.y : Math.random(),
+                    dataType: node.dataType || node.type || null,
+                    full_question: node.full_question || null,
+                    answer_text: node.answer || node.answer_text || null,
+                    proof_text: node.proof || node.proof_text || null,
+                    page_number: node.page_number || null,
+                    orig_size: node.size || 8
+                });
+            });
+            
+            filteredData.edges.forEach(edge => {
+                graph.addEdge(edge.source, edge.target);
+            });
+        });
+
+        // --- ForceAtlas2-like toggle (simple JS implementation) ---
+        let fa2Running = false;
+        let fa2Frame = null;
+        const fa2Toggle = document.getElementById('fa2-toggle');
+        const fa2SpeedSlider = document.getElementById('fa2-speed');
+        const fa2SpeedValue = document.getElementById('fa2-speed-value');
+
+        // Update speed display
+        fa2SpeedSlider.addEventListener('input', (e) => {
+            const speed = parseFloat(e.target.value);
+            fa2SpeedValue.textContent = speed.toFixed(1) + 'x';
+        });
+
+        function getFA2Speed() {
+            return parseFloat(fa2SpeedSlider.value) || 1.0;
+        }
+
+        function ensureNodePositions() {
+            graph.forEachNode((node, attr) => {
+                if (typeof attr.x !== 'number' || typeof attr.y !== 'number') {
+                    graph.setNodeAttribute(node, 'x', Math.random());
+                    graph.setNodeAttribute(node, 'y', Math.random());
+                }
+            });
+        }
+
+        function fa2Step() {
+            // Simple force-directed physics: repulsion + spring attraction
+            const speed = getFA2Speed();
+            const nodes = [];
+            graph.forEachNode((n, a) => nodes.push({ id: n, x: a.x, y: a.y }));
+
+            const nodeCount = nodes.length;
+            const disps = Object.create(null);
+            nodes.forEach(n => { disps[n.id] = { dx: 0, dy: 0 }; });
+
+            // Repulsion (O(n^2), okay for small graphs)
+            // Speed multiplier increases repulsion force
+            const repulsion = 0.0006 * speed; // tuned constant, scaled by speed
+            for (let i = 0; i < nodeCount; i++) {
+                for (let j = i + 1; j < nodeCount; j++) {
+                    const a = nodes[i];
+                    const b = nodes[j];
+                    let vx = a.x - b.x;
+                    let vy = a.y - b.y;
+                    let dist2 = vx * vx + vy * vy + 1e-6;
+                    let dist = Math.sqrt(dist2);
+                    // normalized
+                    let force = repulsion / dist2;
+                    disps[a.id].dx += (vx / dist) * force;
+                    disps[a.id].dy += (vy / dist) * force;
+                    disps[b.id].dx -= (vx / dist) * force;
+                    disps[b.id].dy -= (vy / dist) * force;
+                }
+            }
+
+            // Attraction along edges (springs)
+            // Speed multiplier increases spring force
+            const springStiffness = 0.008 * speed;
+            const idealLength = 0.08;
+            graph.forEachEdge((edge, attr, source, target, sourceAttr, targetAttr) => {
+                const sx = graph.getNodeAttribute(source, 'x');
+                const sy = graph.getNodeAttribute(source, 'y');
+                const tx = graph.getNodeAttribute(target, 'x');
+                const ty = graph.getNodeAttribute(target, 'y');
+                let vx = sx - tx;
+                let vy = sy - ty;
+                let dist = Math.sqrt(vx * vx + vy * vy) + 1e-6;
+                let diff = dist - idealLength;
+                let f = springStiffness * diff;
+                // apply
+                disps[source].dx -= (vx / dist) * f;
+                disps[source].dy -= (vy / dist) * f;
+                disps[target].dx += (vx / dist) * f;
+                disps[target].dy += (vy / dist) * f;
+            });
+
+            // Integrate and update positions
+            // Speed multiplier increases max movement per frame
+            const damping = 0.6;
+            const maxMove = 0.08 * speed;
+            nodes.forEach(n => {
+                const d = disps[n.id];
+                let dx = d.dx * damping;
+                let dy = d.dy * damping;
+                // clamp
+                const m = Math.sqrt(dx * dx + dy * dy);
+                if (m > maxMove) {
+                    dx = (dx / m) * maxMove;
+                    dy = (dy / m) * maxMove;
+                }
+                const nx = n.x + dx;
+                const ny = n.y + dy;
+                graph.setNodeAttribute(n.id, 'x', nx);
+                graph.setNodeAttribute(n.id, 'y', ny);
+            });
+
+            // Ask Sigma to refresh view
+            try {
+                if (typeof renderer.refresh === 'function') renderer.refresh();
+                else if (typeof renderer.render === 'function') renderer.render();
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        function fa2Loop() {
+            fa2Step();
+            if (fa2Running) fa2Frame = requestAnimationFrame(fa2Loop);
+        }
+
+        function startFA2() {
+            if (fa2Running) return;
+            ensureNodePositions();
+            fa2Running = true;
+            fa2Toggle.textContent = 'Stop ForceAtlas';
+            fa2Loop();
+        }
+
+        function stopFA2() {
+            fa2Running = false;
+            if (fa2Frame) cancelAnimationFrame(fa2Frame);
+            fa2Frame = null;
+            fa2Toggle.textContent = 'Start ForceAtlas';
+        }
+
+        fa2Toggle.addEventListener('click', () => {
+            if (!fa2Running) startFA2(); else stopFA2();
+        });
+
+        // Stop FA2 when graph is rebuilt (level change)
+        const originalLevelHandler = levelSlider.onchange;
+
+        
+        // Copy JSON button
+        const copyButton = document.getElementById('copy-json');
+        copyButton.addEventListener('click', () => {
+            navigator.clipboard.writeText(JSON.stringify(rawData, null, 2)).then(() => {
+                copyButton.textContent = 'Copied!';
+                setTimeout(() => {
+                    copyButton.textContent = 'Copy JSON data';
+                }, 2000);
+            });
+        });
+
+        // Node search and filtering
+        const nodeSearch = document.getElementById('node-search');
+        const clearSearch = document.getElementById('clear-search');
+        function applySearchFilter(query) {
+            const q = (query || '').trim().toLowerCase();
+            if (!q) {
+                // reset styles
+                graph.forEachNode((node, attr) => {
+                    const orig = graph.getNodeAttribute(node, 'orig_size') || attr.size || 8;
+                    graph.setNodeAttribute(node, 'size', orig);
+                    graph.setNodeAttribute(node, 'color', attr.color || '#999');
+                    graph.setNodeAttribute(node, 'highlight', false);
+                });
+                try { renderer.refresh(); } catch(e) {}
+                return;
+            }
+
+            graph.forEachNode((node, attr) => {
+                const label = (attr.label || '').toString().toLowerCase();
+                const full = (attr.full_question || '') + ' ' + (attr.answer_text || '') + ' ' + (attr.proof_text || '');
+                const hay = (full + ' ' + label).toLowerCase();
+                const match = label.includes(q) || hay.includes(q);
+                const orig = graph.getNodeAttribute(node, 'orig_size') || attr.size || 8;
+                if (match) {
+                    graph.setNodeAttribute(node, 'size', orig);
+                    // prefer original color if present
+                    graph.setNodeAttribute(node, 'color', attr.color || '#2196F3');
+                    graph.setNodeAttribute(node, 'highlight', true);
+                } else {
+                    graph.setNodeAttribute(node, 'size', Math.max(1, Math.round(orig * 0.35)));
+                    graph.setNodeAttribute(node, 'color', '#e0e0e0');
+                    graph.setNodeAttribute(node, 'highlight', false);
+                }
+            });
+            try { renderer.refresh(); } catch(e) {}
+        }
+
+        nodeSearch.addEventListener('input', (e) => {
+            applySearchFilter(e.target.value);
+        });
+
+        clearSearch.addEventListener('click', () => {
+            nodeSearch.value = '';
+            applySearchFilter('');
+        });
+
+        // Node info panel
+        const infoPanel = document.getElementById('info-panel');
+        const infoPlaceholder = document.getElementById('node-details-placeholder');
+        function showNodeDetails(nodeId) {
+            if (!graph.hasNode(nodeId)) return;
+            const attr = graph.getNodeAttributes(nodeId);
+            
+            // Debug: log all attributes
+            console.log('Node attributes for', nodeId, ':', attr);
+            
+            // Gather connected nodes
+            const connected = new Set();
+            graph.forEachNeighbor(nodeId, n => connected.add(n));
+
+            const html = [];
+            
+            // Full Text - combine all text fields, prioritizing full fields over truncated labels
+            const fullTextParts = [];
+            
+            // For each node type, use the appropriate full text field
+            if (attr.dataType === 'keyword') {
+                if (attr.label) fullTextParts.push(attr.label);
+            } else if (attr.dataType === 'question') {
+                if (attr.full_question) fullTextParts.push(attr.full_question);
+                else if (attr.label) fullTextParts.push(attr.label);
+            } else if (attr.dataType === 'answer') {
+                if (attr.answer_text) fullTextParts.push(attr.answer_text);
+                else if (attr.label) fullTextParts.push(attr.label);
+            } else if (attr.dataType === 'proof') {
+                if (attr.proof_text) fullTextParts.push(attr.proof_text);
+                else if (attr.label) fullTextParts.push(attr.label);
+            } else {
+                // Default: show all available text
+                if (attr.label) fullTextParts.push(attr.label);
+                if (attr.full_question) fullTextParts.push(attr.full_question);
+                if (attr.answer_text) fullTextParts.push(attr.answer_text);
+                if (attr.proof_text) fullTextParts.push(attr.proof_text);
+            }
+            
+            const fullText = fullTextParts.join(' ');
+            
+            html.push(`<div style="margin-bottom:10px;"><strong>Full Text:</strong><div style="white-space:pre-wrap; margin-top:5px;">${escapeHtml(fullText)}</div></div>`);
+            
+            // Type
+            const nodeType = attr.dataType || attr.type || 'unknown';
+            html.push(`<div style="margin-bottom:10px;"><strong>Type:</strong> ${escapeHtml(nodeType)}</div>`);
+            
+            // Connected Nodes
+            html.push('<div style="margin-bottom:5px;"><strong>Connected Nodes:</strong></div>');
+            if (connected.size > 0) {
+                html.push('<ul style="margin:0; padding-left:20px; max-height:150px; overflow-y:auto;">');
+                Array.from(connected).forEach(cid => {
+                    const a = graph.getNodeAttributes(cid) || {};
+                    html.push(`<li><a href="#" data-node="${cid}" class="connector-link">${escapeHtml(a.label || cid)}</a></li>`);
+                });
+                html.push('</ul>');
+            } else {
+                html.push('<div style="color:#666; font-style:italic;">No connected nodes</div>');
+            }
+
+            infoPlaceholder.innerHTML = html.join('');
+
+            // Wire connector link clicks
+            infoPlaceholder.querySelectorAll('.connector-link').forEach(el => {
+                el.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    const nid = ev.currentTarget.getAttribute('data-node');
+                    // center camera on node
+                    const x = graph.getNodeAttribute(nid, 'x');
+                    const y = graph.getNodeAttribute(nid, 'y');
+                    renderer.getCamera().animate({ x, y, duration: 400 });
+                    // show details of that node
+                    showNodeDetails(nid);
+                });
+            });
+        }
+
+        function escapeHtml(s) {
+            if (!s) return '';
+            return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+        }
+
+        // Click handler to show node details
+        renderer.on('clickNode', ({ node }) => {
+            showNodeDetails(node);
+        });
+        
+        // Screenshot functionality
+        const screenshotBtn = document.getElementById('screenshot-btn');
+        screenshotBtn.addEventListener('click', () => {
+            try {
+                // Get the document filename for the screenshot name
+                const docTitle = "{{ document.title or document.filename }}".replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                const fileName = docTitle + '.png';
+                
+                // Create a temporary canvas for export
+                const exportCanvas = document.createElement('canvas');
+                const sigmaContainer = document.getElementById('sigma-container');
+                exportCanvas.width = sigmaContainer.offsetWidth * 2; // 2x for better quality
+                exportCanvas.height = sigmaContainer.offsetHeight * 2;
+                const ctx = exportCanvas.getContext('2d');
+                
+                // Fill white background
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+                
+                // Get camera state
+                const camera = renderer.getCamera();
+                const cameraState = camera.getState();
+                
+                // Calculate transform for rendering
+                const ratio = exportCanvas.width / sigmaContainer.offsetWidth;
+                
+                // Render edges
+                ctx.strokeStyle = '#999';
+                ctx.lineWidth = 1;
+                graph.forEachEdge((edge, attr, source, target) => {
+                    const sourceNode = graph.getNodeAttributes(source);
+                    const targetNode = graph.getNodeAttributes(target);
+                    
+                    // Transform graph coordinates to screen coordinates
+                    const sourcePos = renderer.graphToViewport({x: sourceNode.x, y: sourceNode.y});
+                    const targetPos = renderer.graphToViewport({x: targetNode.x, y: targetNode.y});
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(sourcePos.x * ratio, sourcePos.y * ratio);
+                    ctx.lineTo(targetPos.x * ratio, targetPos.y * ratio);
+                    ctx.stroke();
+                });
+                
+                // Render nodes
+                graph.forEachNode((node, attr) => {
+                    const pos = renderer.graphToViewport({x: attr.x, y: attr.y});
+                    const screenX = pos.x * ratio;
+                    const screenY = pos.y * ratio;
+                    const screenSize = (attr.size || 8) * ratio / cameraState.ratio;
+                    
+                    // Draw node circle
+                    ctx.fillStyle = attr.color || '#999';
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, screenSize, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Draw node border
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = screenSize * 0.15;
+                    ctx.stroke();
+                });
+                
+                // Render labels
+                ctx.fillStyle = '#000';
+                ctx.font = `${12 * ratio}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                graph.forEachNode((node, attr) => {
+                    if (attr.label) {
+                        const pos = renderer.graphToViewport({x: attr.x, y: attr.y});
+                        const screenX = pos.x * ratio;
+                        const screenY = pos.y * ratio;
+                        const screenSize = (attr.size || 8) * ratio / cameraState.ratio;
+                        
+                        // Draw label background for readability
+                        const labelY = screenY + screenSize + 15 * ratio;
+                        const labelText = attr.label.length > 20 ? attr.label.substring(0, 20) + '...' : attr.label;
+                        const textWidth = ctx.measureText(labelText).width;
+                        
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                        ctx.fillRect(screenX - textWidth/2 - 4, labelY - 10, textWidth + 8, 20);
+                        
+                        ctx.fillStyle = '#000';
+                        ctx.fillText(labelText, screenX, labelY);
+                    }
+                });
+                
+                // Convert to blob and download
+                exportCanvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = fileName;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                    
+                    // Visual feedback
+                    screenshotBtn.textContent = '✓ Saved!';
+                    setTimeout(() => {
+                        screenshotBtn.innerHTML = '📸 Screenshot';
+                    }, 2000);
+                }, 'image/png');
+                
+            } catch (err) {
+                console.error('Screenshot error:', err);
+                alert('Failed to capture screenshot: ' + err.message);
+            }
+        });
+        
+        console.log('Graph initialized with ' + initialData.nodes.length + ' nodes and ' + initialData.edges.length + ' edges');
+        
+        return renderer;
+        
+    } catch (err) {
+        console.error('Error initializing graph:', err);
+        const container = document.getElementById('sigma-container');
+        container.innerHTML = '<div style="padding:20px; color:red; font-family:monospace;">Error loading graph:<br><br>' + err.message + '<br><br>' + err.stack + '</div>';
+    }
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', initGraph);
+</script>
+{% endblock %}

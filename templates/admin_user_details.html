@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - User Details{% endblock %}
+
+{% block content %}
+<div class="user-details">
+    <div class="header-actions">
+        <h2>User Details: {{ user.username }}</h2>
+        <a href="{{ url_for('admin.users_list') }}" class="btn btn-secondary">← Back to Users</a>
+    </div>
+
+    <div class="user-info-section">
+        <h3>Account Information</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="label">User ID:</span>
+                <span class="value">{{ user.id }}</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Username:</span>
+                <span class="value">{{ user.username }}</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Account Type:</span>
+                <span class="value">
+                    {% if user.is_admin %}
+                        <span class="badge badge-admin">Admin</span>
+                    {% elif user.is_premium %}
+                        <span class="badge badge-premium">Premium</span>
+                    {% else %}
+                        <span class="badge badge-regular">Regular</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="info-item">
+                <span class="label">API Calls Today:</span>
+                <span class="value">
+                    {% if user.is_admin %}
+                        <span class="unlimited">Unlimited</span>
+                    {% else %}
+                        {{ user.api_calls_today }}/{{ '100' if user.is_premium else '20' }}
+                    {% endif %}
+                </span>
+            </div>
+            <div class="info-item">
+                <span class="label">Last Reset:</span>
+                <span class="value">{{ user.api_calls_reset_date or 'Never' }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="documents-section">
+        <h3>User Documents ({{ documents|length }} total)</h3>
+        
+        <div class="documents-stats">
+            <div class="stat-box">
+                <span class="stat-label">Total Books:</span>
+                <span class="stat-value">{{ documents|length }}</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-label">With Network Data:</span>
+                <span class="stat-value">{{ documents|selectattr('has_network_data')|list|length }}</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-label">Without Data:</span>
+                <span class="stat-value">{{ documents|rejectattr('has_network_data')|list|length }}</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-label">Private Books:</span>
+                <span class="stat-value">{{ documents|selectattr('is_private')|list|length }}</span>
+            </div>
+        </div>
+
+        {% if documents %}
+        <div class="documents-table-container">
+            <table class="documents-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Filename</th>
+                        <th>Category</th>
+                        <th>Status</th>
+                        <th>Entries</th>
+                        <th>Privacy</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in documents %}
+                    <tr>
+                        <td>{{ doc.id }}</td>
+                        <td>{{ doc.filename }}</td>
+                        <td>{{ doc.category or '-' }}</td>
+                        <td>
+                            {% if doc.has_network_data %}
+                                <span class="status-badge status-processed">Processed</span>
+                            {% else %}
+                                <span class="status-badge status-pending">No Data</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ doc.entry_count }}</td>
+                        <td>
+                            {% if doc.is_private %}
+                                <span class="privacy-badge privacy-private">Private</span>
+                            {% else %}
+                                <span class="privacy-badge privacy-public">Public</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ doc.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="no-data">This user has not uploaded any documents yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Admin Actions Panel -->
+<div class="admin-actions" style="max-width:1200px;margin:20px auto;padding:20px;background:#fff;border:1px solid #ddd;border-radius:8px;">
+    <h3>Admin Actions</h3>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+        <div>
+            <label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">Change Account Status</label>
+            <select id="admin-status-select" style="padding:6px;border-radius:4px;border:1px solid #ccc;">
+                <option value="free">Free</option>
+                <option value="premium">Premium</option>
+                <option value="admin">Admin</option>
+            </select>
+            <button id="btn-change-status" class="btn-secondary" style="margin-left:8px;">Apply</button>
+        </div>
+
+        <div>
+            <label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">Adjust API Calls Today</label>
+            <input id="api-calls-input" type="number" min="0" value="{{ user.api_calls_today }}" style="width:100px;padding:6px;border-radius:4px;border:1px solid #ccc;" />
+            <button id="btn-update-api" class="btn-secondary" style="margin-left:8px;">Update</button>
+        </div>
+    </div>
+    <div id="admin-action-result" style="margin-top:12px;"></div>
+</div>
+
+<!-- Edit Document Modal -->
+<div id="edit-doc-modal" style="display:none; position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
+    <div style="background:white; padding:20px; border-radius:8px; width:600px; max-width:95%;">
+        <h3>Edit Document</h3>
+        <input type="hidden" id="edit-doc-id" />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div>
+                <label>Title</label>
+                <input id="edit-title" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;" />
+            </div>
+            <div>
+                <label>Category</label>
+                <input id="edit-category" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;" />
+            </div>
+            <div>
+                <label>Filename</label>
+                <input id="edit-filename" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;" />
+            </div>
+            <div>
+                <label>Private</label>
+                <select id="edit-private" style="width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;"><option value="0">Public</option><option value="1">Private</option></select>
+            </div>
+        </div>
+        <div style="margin-top:12px;display:flex;justify-content:space-between;">
+            <button id="edit-delete" class="btn-secondary" style="background:#c0392b;">Delete Document</button>
+            <div>
+                <button id="edit-cancel" class="btn-secondary">Cancel</button>
+                <button id="edit-save" class="btn-secondary" style="margin-left:8px;">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Admin actions JS
+document.getElementById('btn-change-status').addEventListener('click', async () => {
+    const status = document.getElementById('admin-status-select').value;
+    const userId = {{ user.id }};
+    const resDiv = document.getElementById('admin-action-result');
+    resDiv.innerHTML = 'Processing...';
+    try {
+        const resp = await fetch('/admin/api/admin/change-account-status', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user_id: userId, status})});
+        const data = await resp.json();
+        if (data.error) resDiv.innerHTML = `<div style="color:#c0392b">${data.error}</div>`;
+        else resDiv.innerHTML = `<div style="color:#27ae60">${data.message || 'Status updated'}</div>`;
+        setTimeout(()=>location.reload(),800);
+    } catch (e) { resDiv.innerHTML = `<div style="color:#c0392b">Error: ${e.message}</div>` }
+});
+
+document.getElementById('btn-update-api').addEventListener('click', async () => {
+    const userId = {{ user.id }};
+    const val = parseInt(document.getElementById('api-calls-input').value) || 0;
+    const resDiv = document.getElementById('admin-action-result');
+    resDiv.innerHTML = 'Updating API usage...';
+    try {
+        const resp = await fetch('/admin/api/admin/update-api-usage', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user_id: userId, api_calls_today: val})});
+        const data = await resp.json();
+        if (data.error) resDiv.innerHTML = `<div style="color:#c0392b">${data.error}</div>`;
+        else resDiv.innerHTML = `<div style="color:#27ae60">API usage updated</div>`;
+        setTimeout(()=>location.reload(),800);
+    } catch (e) { resDiv.innerHTML = `<div style="color:#c0392b">Error: ${e.message}</div>` }
+});
+
+// Document edit buttons
+document.querySelectorAll('.documents-table tbody tr').forEach(tr => {
+    // Append edit button cell
+    const docId = tr.querySelector('td').textContent.trim();
+    const btnCell = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.textContent = 'Edit';
+    btn.className = 'btn-secondary';
+    btn.style.marginLeft = '8px';
+    btn.addEventListener('click', async () => {
+        // Load document details
+        const resp = await fetch('/admin/api/document-info?document_id=' + docId);
+        const info = await resp.json();
+        if (info.error) { alert(info.error); return; }
+        document.getElementById('edit-doc-id').value = info.id;
+        document.getElementById('edit-title').value = info.title || '';
+        document.getElementById('edit-category').value = info.category || '';
+        document.getElementById('edit-filename').value = info.filename || '';
+        document.getElementById('edit-private').value = info.is_private ? '1' : '0';
+        document.getElementById('edit-doc-modal').style.display = 'flex';
+    });
+    btnCell.appendChild(btn);
+    tr.appendChild(btnCell);
+});
+
+document.getElementById('edit-cancel').addEventListener('click', () => {
+    document.getElementById('edit-doc-modal').style.display = 'none';
+});
+
+document.getElementById('edit-save').addEventListener('click', async () => {
+    const docId = document.getElementById('edit-doc-id').value;
+    const updates = {
+        title: document.getElementById('edit-title').value,
+        category: document.getElementById('edit-category').value,
+        filename: document.getElementById('edit-filename').value,
+        is_private: parseInt(document.getElementById('edit-private').value)
+    };
+    const resp = await fetch('/admin/api/admin/edit-document', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({document_id: docId, updates})});
+    const data = await resp.json();
+    if (data.error) alert(data.error); else { document.getElementById('edit-doc-modal').style.display = 'none'; location.reload(); }
+});
+
+document.getElementById('edit-delete').addEventListener('click', async () => {
+    if (!confirm('Are you sure you want to permanently delete this document? This cannot be undone.')) return;
+    const docId = document.getElementById('edit-doc-id').value;
+    const resp = await fetch('/admin/api/admin/delete-document', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({document_id: docId, confirm: true})});
+    const data = await resp.json();
+    if (data.error) alert(data.error); 
+    else { 
+        document.getElementById('edit-doc-modal').style.display = 'none'; 
+        location.reload(); 
+    }
+});
+</script>
+
+<style>
+.user-details {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.header-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.header-actions h2 {
+    margin: 0;
+}
+
+.btn-secondary {
+    padding: 10px 20px;
+    background: #6c757d;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.user-info-section, .documents-section {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.user-info-section h3, .documents-section h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #2c3e50;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.info-item .label {
+    font-size: 13px;
+    color: #666;
+    font-weight: 600;
+}
+
+.info-item .value {
+    font-size: 16px;
+    color: #2c3e50;
+}
+
+.documents-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-box {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 6px;
+    text-align: center;
+}
+
+.stat-label {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.stat-value {
+    display: block;
+    font-size: 24px;
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+.documents-table-container {
+    overflow-x: auto;
+}
+
+.documents-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.documents-table th {
+    background: #f8f9fa;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #2c3e50;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.documents-table td {
+    padding: 12px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.documents-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-admin {
+    background: #e74c3c;
+    color: white;
+}
+
+.badge-premium {
+    background: #f39c12;
+    color: white;
+}
+
+.badge-regular {
+    background: #95a5a6;
+    color: white;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.status-processed {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.privacy-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.privacy-private {
+    background: #cce5ff;
+    color: #004085;
+}
+
+.privacy-public {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.unlimited {
+    color: #27ae60;
+    font-weight: 600;
+}
+
+.no-data {
+    text-align: center;
+    color: #666;
+    padding: 40px 20px;
+    font-style: italic;
+}
+</style>
+{% endblock %}

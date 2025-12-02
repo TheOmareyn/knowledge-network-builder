@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block title %}Login - Knowledge Network Builder{% endblock %}
+
+{% block content %}
+<h2>Login</h2>
+<form method="post" action="{{ url_for('auth.login') }}">
+    <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" required class="form-control">
+    </div>
+    <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required class="form-control">
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Login</button>
+        <a href="{{ url_for('auth.register') }}" class="btn btn-link">Register</a>
+    </div>
+</form>
+{% endblock %}

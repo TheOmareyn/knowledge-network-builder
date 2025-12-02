@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Merge Keywords{% endblock %}
+
+{% block content %}
+<div class="merge-keywords-container">
+    <div class="header-actions">
+        <h2>Merge Keywords</h2>
+        <a href="{{ url_for('admin.users_list') }}" class="btn btn-secondary">← Back to Admin</a>
+    </div>
+
+    <div class="info-box">
+        <p><strong>Purpose:</strong> Combine two keywords by renaming all instances of one keyword to another.</p>
+        <p><strong>How it works:</strong> Select a source keyword (left) and target keyword (right). All entries with the source keyword will be changed to the target keyword.</p>
+        <p><strong>⚠️ Warning:</strong> This action cannot be undone. The source keyword will no longer exist after merging.</p>
+    </div>
+
+    <div class="merge-section">
+        <h3>Select Keywords to Merge</h3>
+        
+        <div class="merge-controls">
+            <div class="keyword-selector">
+                <label for="sourceKeyword">Source Keyword (will be removed)</label>
+                <select id="sourceKeyword" class="keyword-dropdown">
+                    <option value="">-- Select source keyword --</option>
+                    {% for keyword in keywords %}
+                    <option value="{{ keyword }}">{{ keyword }}</option>
+                    {% endfor %}
+                </select>
+                <p class="help-text">This keyword will be renamed</p>
+            </div>
+
+            <div class="merge-arrow">
+                <span class="arrow-icon">→</span>
+                <p class="arrow-label">Merge into</p>
+            </div>
+
+            <div class="keyword-selector">
+                <label for="targetKeyword">Target Keyword (will remain)</label>
+                <select id="targetKeyword" class="keyword-dropdown">
+                    <option value="">-- Select target keyword --</option>
+                    {% for keyword in keywords %}
+                    <option value="{{ keyword }}">{{ keyword }}</option>
+                    {% endfor %}
+                </select>
+                <p class="help-text">All entries will use this keyword</p>
+            </div>
+        </div>
+
+        <div class="action-section">
+            <button id="mergeBtn" class="btn btn-danger" disabled>
+                Merge Keywords
+            </button>
+        </div>
+    </div>
+
+    <div id="resultContainer" class="result-container" style="display: none;">
+        <div id="resultContent"></div>
+    </div>
+</div>
+
+<style>
+.merge-keywords-container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.header-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.header-actions h2 {
+    margin: 0;
+}
+
+.btn-secondary {
+    padding: 10px 20px;
+    background: #6c757d;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.info-box {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.info-box p {
+    margin: 5px 0;
+    color: #856404;
+}
+
+.info-box p:last-child {
+    margin-top: 10px;
+    font-weight: bold;
+    color: #721c24;
+}
+
+.merge-section {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 30px;
+    margin-bottom: 30px;
+}
+
+.merge-section h3 {
+    margin-top: 0;
+    margin-bottom: 30px;
+    color: #2c3e50;
+}
+
+.merge-controls {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 30px;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.keyword-selector {
+    display: flex;
+    flex-direction: column;
+}
+
+.keyword-selector label {
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #2c3e50;
+}
+
+.keyword-dropdown {
+    padding: 12px;
+    font-size: 16px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+}
+
+.keyword-dropdown:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.help-text {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #666;
+    font-style: italic;
+}
+
+.merge-arrow {
+    text-align: center;
+    padding: 20px 0;
+}
+
+.arrow-icon {
+    display: block;
+    font-size: 48px;
+    color: #3498db;
+    margin-bottom: 10px;
+}
+
+.arrow-label {
+    font-size: 14px;
+    color: #666;
+    font-weight: 600;
+    margin: 0;
+}
+
+.action-section {
+    text-align: center;
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+}
+
+.btn {
+    padding: 14px 32px;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-danger {
+    background: #e74c3c;
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #c0392b;
+}
+
+.btn-danger:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+}
+
+.result-container {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.success-message {
+    background: #d4edda;
+    color: #155724;
+    padding: 20px;
+    border-radius: 6px;
+    border: 1px solid #c3e6cb;
+}
+
+.success-message h4 {
+    margin: 0 0 10px 0;
+}
+
+.success-message .success-icon {
+    font-size: 48px;
+    margin-bottom: 15px;
+}
+
+.success-details {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #c3e6cb;
+}
+
+.success-details p {
+    margin: 5px 0;
+}
+
+.error-message {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 20px;
+    border-radius: 6px;
+    border: 1px solid #f5c6cb;
+}
+
+.error-message strong {
+    display: block;
+    margin-bottom: 10px;
+}
+
+@media (max-width: 768px) {
+    .merge-controls {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    .merge-arrow {
+        transform: rotate(90deg);
+        padding: 10px 0;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sourceSelect = document.getElementById('sourceKeyword');
+    const targetSelect = document.getElementById('targetKeyword');
+    const mergeBtn = document.getElementById('mergeBtn');
+    const resultContainer = document.getElementById('resultContainer');
+    const resultContent = document.getElementById('resultContent');
+    
+    let isMerging = false;
+    
+    // Enable merge button only when both keywords are selected and different
+    function updateMergeButton() {
+        const source = sourceSelect.value;
+        const target = targetSelect.value;
+        
+        mergeBtn.disabled = !source || !target || source === target || isMerging;
+    }
+    
+    sourceSelect.addEventListener('change', updateMergeButton);
+    targetSelect.addEventListener('change', updateMergeButton);
+    
+    // Handle merge button click
+    mergeBtn.addEventListener('click', function() {
+        const source = sourceSelect.value;
+        const target = targetSelect.value;
+        
+        if (!source || !target || source === target) return;
+        
+        // Confirm action
+        const confirmed = confirm(
+            `⚠️ WARNING: This action cannot be undone!\n\n` +
+            `All entries with keyword "${source}" will be changed to "${target}".\n` +
+            `The keyword "${source}" will no longer exist.\n\n` +
+            `Do you want to proceed?`
+        );
+        
+        if (!confirmed) return;
+        
+        performMerge(source, target);
+    });
+    
+    function performMerge(source, target) {
+        isMerging = true;
+        mergeBtn.disabled = true;
+        mergeBtn.textContent = 'Merging...';
+        sourceSelect.disabled = true;
+        targetSelect.disabled = true;
+        resultContainer.style.display = 'none';
+        
+        fetch('/admin/api/merge-keywords', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                source_keyword: source,
+                target_keyword: target
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showError(data.error);
+            } else if (data.success) {
+                showSuccess(data);
+                
+                // Remove source keyword from both dropdowns
+                removeOptionFromSelect(sourceSelect, source);
+                removeOptionFromSelect(targetSelect, source);
+                
+                // Reset selections
+                sourceSelect.value = '';
+                targetSelect.value = '';
+            }
+        })
+        .catch(error => {
+            showError(`Network error: ${error.message}`);
+        })
+        .finally(() => {
+            isMerging = false;
+            mergeBtn.textContent = 'Merge Keywords';
+            sourceSelect.disabled = false;
+            targetSelect.disabled = false;
+            updateMergeButton();
+        });
+    }
+    
+    function showSuccess(data) {
+        resultContent.innerHTML = `
+            <div class="success-message">
+                <div class="success-icon">✓</div>
+                <h4>Keywords Merged Successfully!</h4>
+                <p>The keyword "${data.source_keyword}" has been merged into "${data.target_keyword}".</p>
+                <div class="success-details">
+                    <p><strong>Entries updated:</strong> ${data.rows_affected}</p>
+                    <p>All knowledge entries have been updated in the database.</p>
+                </div>
+            </div>
+        `;
+        resultContainer.style.display = 'block';
+    }
+    
+    function showError(errorMsg) {
+        resultContent.innerHTML = `
+            <div class="error-message">
+                <strong>Error:</strong>
+                <p>${errorMsg}</p>
+                <em>The merge operation was not completed.</em>
+            </div>
+        `;
+        resultContainer.style.display = 'block';
+    }
+    
+    function removeOptionFromSelect(selectElement, value) {
+        const options = selectElement.options;
+        for (let i = options.length - 1; i >= 0; i--) {
+            if (options[i].value === value) {
+                selectElement.remove(i);
+                break;
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

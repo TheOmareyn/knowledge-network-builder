@@ -1,0 +1,537 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Keyword Similarity Check{% endblock %}
+
+{% block content %}
+<div class="similarity-check-container">
+    <div class="header-actions">
+        <h2>Keyword Similarity Detection</h2>
+        <a href="{{ url_for('admin.users_list') }}" class="btn btn-secondary">← Back to Admin</a>
+    </div>
+
+    <div class="info-box">
+        <p><strong>Purpose:</strong> This tool detects similar questions within a keyword and allows you to merge them for consistency.</p>
+        <p><strong>How it works:</strong> Select a keyword, the system will check all questions for similarities over 90%, then you can approve merges.</p>
+    </div>
+
+    <div class="keyword-selection">
+        <h3>Step 1: Select a Keyword</h3>
+        <div class="select-container">
+            <select id="keywordSelect" class="keyword-dropdown">
+                <option value="">-- Choose a keyword --</option>
+                {% for keyword in keywords %}
+                <option value="{{ keyword }}">{{ keyword }}</option>
+                {% endfor %}
+            </select>
+            <button id="checkSimilarityBtn" class="btn btn-primary" disabled>Check Similarity</button>
+        </div>
+    </div>
+
+    <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+        <div class="spinner"></div>
+        <p>Analyzing questions with AI...</p>
+    </div>
+
+    <div id="resultsContainer" class="results-container" style="display: none;">
+        <h3>Step 2: Review Similar Questions</h3>
+        <div id="resultsContent"></div>
+    </div>
+</div>
+
+<style>
+.similarity-check-container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.header-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.header-actions h2 {
+    margin: 0;
+}
+
+.btn-secondary {
+    padding: 10px 20px;
+    background: #6c757d;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.info-box {
+    background: #e7f3ff;
+    border: 1px solid #b3d9ff;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.info-box p {
+    margin: 5px 0;
+    color: #004085;
+}
+
+.keyword-selection, .results-container {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 25px;
+    margin-bottom: 30px;
+}
+
+.keyword-selection h3, .results-container h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #2c3e50;
+}
+
+.select-container {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.keyword-dropdown {
+    flex: 1;
+    padding: 12px;
+    font-size: 16px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+}
+
+.keyword-dropdown:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.btn {
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: #3498db;
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #2980b9;
+}
+
+.btn-primary:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+}
+
+.btn-success {
+    background: #27ae60;
+    color: white;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.btn-success:hover {
+    background: #229954;
+}
+
+.btn-danger {
+    background: #e74c3c;
+    color: white;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.btn-danger:hover {
+    background: #c0392b;
+}
+
+.loading-indicator {
+    text-align: center;
+    padding: 40px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.similarity-pair {
+    background: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.similarity-pair.merged {
+    background: #d4edda;
+    border-color: #c3e6cb;
+    opacity: 0.7;
+}
+
+.similarity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.similarity-score {
+    background: #ffc107;
+    color: #000;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.question-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.question-option {
+    background: white;
+    border: 2px solid #dee2e6;
+    border-radius: 6px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.question-option:hover {
+    border-color: #3498db;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.question-option.selected {
+    border-color: #27ae60;
+    background: #d4edda;
+}
+
+.question-option h4 {
+    margin: 0 0 10px 0;
+    color: #666;
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.question-text {
+    color: #2c3e50;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.action-buttons {
+    margin-top: 15px;
+    text-align: right;
+}
+
+.no-similarities {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+
+.no-similarities-icon {
+    font-size: 48px;
+    margin-bottom: 15px;
+}
+
+.merge-status {
+    display: inline-block;
+    padding: 5px 12px;
+    background: #28a745;
+    color: white;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 10px;
+}
+
+.error-message {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 15px;
+    border-radius: 6px;
+    border: 1px solid #f5c6cb;
+    margin-top: 20px;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const keywordSelect = document.getElementById('keywordSelect');
+    const checkBtn = document.getElementById('checkSimilarityBtn');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const resultsContainer = document.getElementById('resultsContainer');
+    const resultsContent = document.getElementById('resultsContent');
+    
+    let currentKeyword = '';
+    let selectedQuestions = {};
+    let isProcessing = false; // Flag to prevent concurrent API calls
+    
+    // Enable check button when keyword is selected
+    keywordSelect.addEventListener('change', function() {
+        checkBtn.disabled = !this.value || isProcessing;
+    });
+    
+    // Check similarity button click
+    checkBtn.addEventListener('click', function() {
+        if (isProcessing) {
+            alert('Please wait for the current analysis to complete.');
+            return;
+        }
+        
+        currentKeyword = keywordSelect.value;
+        if (!currentKeyword) return;
+        
+        checkSimilarity(currentKeyword);
+    });
+    
+    function checkSimilarity(keyword) {
+        // Prevent concurrent requests
+        if (isProcessing) {
+            alert('An analysis is already in progress. Please wait.');
+            return;
+        }
+        
+        isProcessing = true;
+        checkBtn.disabled = true;
+        keywordSelect.disabled = true;
+        
+        // Show loading
+        loadingIndicator.style.display = 'block';
+        resultsContainer.style.display = 'none';
+        resultsContent.innerHTML = '';
+        selectedQuestions = {};
+        
+        // Call API
+        fetch('/admin/api/check-keyword-similarity', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ keyword: keyword })
+        })
+        .then(response => response.json())
+        .then(data => {
+            loadingIndicator.style.display = 'none';
+            isProcessing = false;
+            keywordSelect.disabled = false;
+            checkBtn.disabled = !keywordSelect.value;
+            
+            if (data.error) {
+                resultsContent.innerHTML = `
+                    <div class="error-message">
+                        <strong>Error:</strong> ${data.error}<br>
+                        <em>The analysis was not completed. Please select a different keyword or try again later.</em>
+                    </div>`;
+                resultsContainer.style.display = 'block';
+                return;
+            }
+            
+            displayResults(data);
+        })
+        .catch(error => {
+            loadingIndicator.style.display = 'none';
+            isProcessing = false;
+            keywordSelect.disabled = false;
+            checkBtn.disabled = !keywordSelect.value;
+            resultsContent.innerHTML = `
+                <div class="error-message">
+                    <strong>Network Error:</strong> ${error.message}<br>
+                    <em>Unable to reach the server. Please check your connection and try again.</em>
+                </div>`;
+            resultsContainer.style.display = 'block';
+        });
+    }
+    
+    function displayResults(data) {
+        const similarities = data.similarities;
+        
+        if (Object.keys(similarities).length === 0) {
+            resultsContent.innerHTML = `
+                <div class="no-similarities">
+                    <div class="no-similarities-icon">✓</div>
+                    <h3>No Similar Questions Found</h3>
+                    <p>All questions in this keyword are sufficiently unique (< 90% similarity).</p>
+                </div>
+            `;
+            resultsContainer.style.display = 'block';
+            return;
+        }
+        
+        let html = '<div class="similarities-list">';
+        let pairIndex = 0;
+        
+        for (const [question1, matches] of Object.entries(similarities)) {
+            for (const [question2, similarity] of Object.entries(matches)) {
+                pairIndex++;
+                html += createSimilarityPairHTML(question1, question2, similarity, pairIndex);
+            }
+        }
+        
+        html += '</div>';
+        resultsContent.innerHTML = html;
+        resultsContainer.style.display = 'block';
+        
+        // Attach event listeners
+        attachQuestionSelectionListeners();
+    }
+    
+    function createSimilarityPairHTML(q1, q2, similarity, index) {
+        return `
+            <div class="similarity-pair" data-pair-index="${index}">
+                <div class="similarity-header">
+                    <h4>Similar Pair #${index}</h4>
+                    <span class="similarity-score">${similarity}% Similar</span>
+                </div>
+                <div class="question-options">
+                    <div class="question-option" data-pair="${index}" data-question="${escapeHtml(q1)}" data-other="${escapeHtml(q2)}">
+                        <h4>Question A</h4>
+                        <p class="question-text">${escapeHtml(q1)}</p>
+                    </div>
+                    <div class="question-option" data-pair="${index}" data-question="${escapeHtml(q2)}" data-other="${escapeHtml(q1)}">
+                        <h4>Question B</h4>
+                        <p class="question-text">${escapeHtml(q2)}</p>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-success merge-btn" data-pair="${index}" disabled>
+                        Merge Selected
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    
+    function attachQuestionSelectionListeners() {
+        document.querySelectorAll('.question-option').forEach(option => {
+            option.addEventListener('click', function() {
+                const pairIndex = this.dataset.pair;
+                const pairContainer = document.querySelector(`[data-pair-index="${pairIndex}"]`);
+                
+                // Deselect other option in the same pair
+                pairContainer.querySelectorAll('.question-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                });
+                
+                // Select this option
+                this.classList.add('selected');
+                
+                // Store selection
+                selectedQuestions[pairIndex] = {
+                    selected: this.dataset.question,
+                    other: this.dataset.other
+                };
+                
+                // Enable merge button
+                pairContainer.querySelector('.merge-btn').disabled = false;
+            });
+        });
+        
+        document.querySelectorAll('.merge-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const pairIndex = this.dataset.pair;
+                if (selectedQuestions[pairIndex]) {
+                    approveMerge(pairIndex);
+                }
+            });
+        });
+    }
+    
+    function approveMerge(pairIndex) {
+        const selection = selectedQuestions[pairIndex];
+        if (!selection) return;
+        
+        const pairContainer = document.querySelector(`[data-pair-index="${pairIndex}"]`);
+        const mergeBtn = pairContainer.querySelector('.merge-btn');
+        
+        mergeBtn.disabled = true;
+        mergeBtn.textContent = 'Merging...';
+        
+        fetch('/admin/api/approve-similarity', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                keyword: currentKeyword,
+                selected_question: selection.selected,
+                similar_question: selection.other
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                pairContainer.classList.add('merged');
+                mergeBtn.textContent = '✓ Merged';
+                mergeBtn.classList.remove('btn-success');
+                mergeBtn.classList.add('btn-secondary');
+                
+                // Add success message
+                const header = pairContainer.querySelector('.similarity-header h4');
+                header.innerHTML += ' <span class="merge-status">Merged</span>';
+                
+                // Disable further interaction
+                pairContainer.querySelectorAll('.question-option').forEach(opt => {
+                    opt.style.cursor = 'not-allowed';
+                    opt.onclick = null;
+                });
+            } else {
+                alert('Error merging questions: ' + (data.error || 'Unknown error'));
+                mergeBtn.disabled = false;
+                mergeBtn.textContent = 'Merge Selected';
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+            mergeBtn.disabled = false;
+            mergeBtn.textContent = 'Merge Selected';
+        });
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+});
+</script>
+{% endblock %}
